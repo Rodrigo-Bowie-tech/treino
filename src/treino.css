@@ -1,0 +1,505 @@
+/* App Treino: usa a base visual do Minha Saúde (src/styles.css) com destaque violeta. */
+
+:root {
+  --accent: #6b3fd4;
+  --accent-strong: #5128b0;
+  --accent-soft: #efe9fc;
+  --info-soft: #efe9fc;
+  --series-1: #6b3fd4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --accent: #7d55e0;
+    --accent-strong: #b9a0f3;
+    --accent-soft: #231a3a;
+    --info-soft: #231a3a;
+    --series-1: #9b7cec;
+  }
+}
+
+:root[data-theme='dark'] {
+  --accent: #7d55e0;
+  --accent-strong: #b9a0f3;
+  --accent-soft: #231a3a;
+  --info-soft: #231a3a;
+  --series-1: #9b7cec;
+}
+
+/* ——— Utilidades ——— */
+
+.btn.big {
+  min-height: 54px;
+  font-size: 1.05rem;
+}
+
+.icon-btn.big {
+  width: 48px;
+  height: 48px;
+}
+
+.center {
+  text-align: center;
+  justify-content: center;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 420px) {
+  .grid-3 {
+    gap: 8px;
+  }
+  .grid-3 .stat {
+    padding: 10px;
+  }
+  .grid-3 .stat-value {
+    font-size: 1.25rem;
+  }
+}
+
+.input.compact {
+  width: auto;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.how-to,
+.care-list {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exercise-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sync-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+  text-decoration: none;
+  padding: 4px 2px;
+}
+
+.sync-line.error {
+  color: var(--critical-ink);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ——— Plano do treino ——— */
+
+.phase {
+  display: flex;
+  flex-direction: column;
+  border-left: 3px solid var(--phase-color, var(--accent));
+  padding-left: 12px;
+}
+
+.phase-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.phase-aquecimento {
+  --phase-color: #eb6834;
+}
+.phase-fascite {
+  --phase-color: #0f9d8a;
+}
+.phase-bracos {
+  --phase-color: var(--accent);
+}
+.phase-alongamento {
+  --phase-color: #3987e5;
+}
+
+/* ——— Player ——— */
+
+.app.in-session .content {
+  margin-left: auto;
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+  max-width: 620px;
+}
+
+.player {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.player-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-clock {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+}
+
+.phase-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 6px;
+}
+
+.phase-strip li {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding-top: 6px;
+  border-top: 4px solid var(--surface-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phase-strip li.done {
+  border-top-color: var(--accent-soft);
+}
+
+.phase-strip li[aria-current='step'] {
+  color: var(--ink);
+  border-top-color: var(--accent);
+}
+
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--phase-color, var(--accent));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-card .overline {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.step-card h1 {
+  font-size: 1.6rem;
+}
+
+.step-sub {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.step-card.kind-descanso .step-sub,
+.step-card.kind-prep .step-sub {
+  color: var(--ink-2);
+}
+
+.big-clock {
+  font-size: clamp(4rem, 22vw, 6.5rem);
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  padding: 8px 0;
+}
+
+.step-card.kind-descanso .big-clock,
+.step-card.kind-prep .big-clock {
+  color: var(--ink-2);
+}
+
+.target {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 0.95rem;
+}
+
+.steppers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepper-row .icon-btn {
+  width: 48px;
+  height: 48px;
+}
+
+.stepper-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 650;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.stepper-row input::-webkit-outer-spin-button,
+.stepper-row input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+details.how summary {
+  list-style-position: inside;
+}
+
+.player-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.paused-overlay {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.paused-overlay p:first-child {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.finish h1 {
+  font-size: 1.6rem;
+}
+
+/* ——— Escala de dor ——— */
+
+.pain-scale {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.pain-scale .chip {
+  padding: 0;
+  justify-content: center;
+  min-height: 40px;
+  font-weight: 650;
+}
+
+.pain-scale .chip.pain-low[aria-pressed='true'] {
+  background: var(--good-ink);
+  border-color: var(--good-ink);
+}
+.pain-scale .chip.pain-mid[aria-pressed='true'] {
+  background: var(--warning-ink);
+  border-color: var(--warning-ink);
+}
+.pain-scale .chip.pain-high[aria-pressed='true'] {
+  background: var(--critical-ink);
+  border-color: var(--critical-ink);
+}
+
+/* ——— Código QR (sempre preto no branco, para a câmera ler) ——— */
+
+.qr {
+  width: min(260px, 100%);
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ——— Perfis e entrada ——— */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.avatar.big {
+  width: 56px;
+  height: 56px;
+  font-size: 1.5rem;
+}
+
+.login {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  padding-top: 12px;
+}
+
+.login-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.login-head img {
+  width: 56px;
+  height: 56px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.profile-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.profile-btn:hover {
+  border-color: var(--accent);
+}
+
+.profile-btn .avatar {
+  width: 56px;
+  height: 56px;
+  font-size: 1.5rem;
+}
+
+.profile-btn.add {
+  background: transparent;
+  border-style: dashed;
+  color: var(--ink-2);
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pin-input {
+  font-size: 1.5rem !important;
+  letter-spacing: 0.4em;
+  text-align: center;
+}
+
+.inline-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.inline-field .field {
+  flex: 1;
+}
+
+.nav .nav-profile {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .nav .nav-profile {
+    display: flex;
+    margin-top: auto;
+  }
+  .nav-profile .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+  }
+}
