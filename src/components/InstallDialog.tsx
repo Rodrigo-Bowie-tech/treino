@@ -28,7 +28,7 @@ function useOpen(): boolean {
   );
 }
 
-function readDismissed(key: string): number | undefined {
+function readNumber(key: string): number | undefined {
   try {
     const v = Number(localStorage.getItem(key));
     return Number.isFinite(v) && v > 0 ? v : undefined;
@@ -37,12 +37,18 @@ function readDismissed(key: string): number | undefined {
   }
 }
 
-function writeDismissed(key: string, at: number): void {
+function writeNumber(key: string, value: number): void {
   try {
-    localStorage.setItem(key, String(at));
+    localStorage.setItem(key, String(value));
   } catch {
     // Sem armazenamento: a janela pode voltar na próxima visita.
   }
+}
+
+/** A rota do app (HashRouter) começa com alguma das rotas que não devem ser interrompidas. */
+function inQuietRoute(quietRoutes: string[]): boolean {
+  const route = location.hash.replace(/^#/, '') || '/';
+  return quietRoutes.some((r) => route.startsWith(r));
 }
 
 interface Props {
@@ -52,6 +58,11 @@ interface Props {
   dismissKey: string;
   /** Não abre sozinha nestas rotas (ex.: no meio de um treino). */
   quietRoutes?: string[];
+  /**
+   * Aviso para quem instala no iPhone (ou no Safari do Mac), onde o app instalado
+   * começa sem os dados que estavam no navegador.
+   */
+  dataNote?: string;
 }
 
 /**
@@ -59,7 +70,8 @@ interface Props {
  * navegador (e não instalado); no Android/computador instala com um toque,
  * no iPhone e nos demais mostra o passo a passo.
  */
-export function InstallDialog({ appName, iconSrc, dismissKey, quietRoutes = [] }: Props) {
+export function InstallDialog({ appName, iconSrc, dismissKey, quietRoutes = [], dataNote }: Props) {
+  const installedKey = `${dismissKey}:instalado`;
   const isOpen = useOpen();
   const install = useInstallPrompt();
   const [installed, setInstalled] = useState(false);
@@ -70,24 +82,28 @@ export function InstallDialog({ appName, iconSrc, dismissKey, quietRoutes = [] }
     maxTouchPoints: navigator.maxTouchPoints,
   });
 
+  // Abre sozinha uma vez, logo depois de abrir o app no navegador (não depois de já instalado).
   useEffect(() => {
-    if (isStandalone()) return;
-    const route = location.hash.replace(/^#/, '') || '/';
-    if (quietRoutes.some((r) => route.startsWith(r))) return;
-    if (!shouldAutoOpen(readDismissed(dismissKey), Date.now())) return;
-    const id = setTimeout(() => setOpen(true), 1200);
+    if (isStandalone() || readNumber(installedKey)) return;
+    if (!shouldAutoOpen(readNumber(dismissKey), Date.now())) return;
+    const id = setTimeout(() => {
+      // Confere de novo: a pessoa pode ter ido para uma tela que não deve ser interrompida.
+      if (!inQuietRoute(quietRoutes)) setOpen(true);
+    }, 1200);
     return () => clearTimeout(id);
-    // Só ao abrir o app.
   }, []);
 
   useEffect(() => {
-    const onInstalled = () => setInstalled(true);
+    const onInstalled = () => {
+      writeNumber(installedKey, Date.now());
+      setInstalled(true);
+    };
     window.addEventListener('appinstalled', onInstalled);
     return () => window.removeEventListener('appinstalled', onInstalled);
   }, []);
 
   const close = () => {
-    if (!installed) writeDismissed(dismissKey, Date.now());
+    if (!installed) writeNumber(dismissKey, Date.now());
     setOpen(false);
   };
 
@@ -95,7 +111,7 @@ export function InstallDialog({ appName, iconSrc, dismissKey, quietRoutes = [] }
     if (!install) return;
     setBusy(true);
     try {
-      await install();
+      if ((await install()) === 'accepted') writeNumber(installedKey, Date.now());
     } finally {
       setBusy(false);
     }
@@ -146,6 +162,13 @@ export function InstallDialog({ appName, iconSrc, dismissKey, quietRoutes = [] }
             ))}
           </ol>
           {help.note && <p className="muted small">{help.note}</p>}
+          {help.separateStorage && dataNote && (
+            <div className="alert warning">
+              <div className="alert-body">
+                <span>{dataNote}</span>
+              </div>
+            </div>
+          )}
         </>
       )}
 

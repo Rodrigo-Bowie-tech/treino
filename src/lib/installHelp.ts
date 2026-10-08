@@ -8,6 +8,8 @@ export interface InstallHelp {
   steps: string[];
   /** Observação extra (ex.: o app já pode estar instalado). */
   note?: string;
+  /** O app instalado guarda os dados separado do navegador (iPhone e Safari do Mac). */
+  separateStorage?: boolean;
 }
 
 export interface DeviceInfo {
@@ -44,6 +46,7 @@ export function installHelp(appName: string, device: DeviceInfo): InstallHelp {
         `Toque em “Adicionar”. O ícone do ${appName} aparece na tela inicial.`,
       ],
       note: 'No iPhone, use o Safari (ou o Chrome a partir do iOS 16.4, pelo mesmo botão Compartilhar).',
+      separateStorage: true,
     };
   }
 
@@ -59,7 +62,10 @@ export function installHelp(appName: string, device: DeviceInfo): InstallHelp {
     }
     return {
       platform: 'android',
-      steps: ['Toque no menu (⋮) do Chrome, no canto de cima.', 'Toque em “Instalar app” (ou “Adicionar à tela inicial”) e confirme.'],
+      steps: [
+        'Toque no menu (⋮) do navegador, no canto de cima.',
+        'Toque em “Instalar app” (ou “Adicionar à tela inicial”) e confirme.',
+      ],
       note: `Se aparecer “Abrir no app” em vez de “Instalar”, o ${appName} já está instalado neste celular.`,
     };
   }
@@ -71,13 +77,15 @@ export function installHelp(appName: string, device: DeviceInfo): InstallHelp {
         'Clique no ícone de instalar, no lado direito da barra de endereço (um monitor com uma seta).',
         `Ou abra o menu (⋮ ou ⋯) e escolha “Instalar ${appName}” / “Aplicativos → Instalar este site como um aplicativo”.`,
       ],
+      note: `Se na barra de endereço aparecer “Abrir no ${appName}”, ele já está instalado neste computador.`,
     };
   }
 
-  if (/Safari\//.test(ua) && /Macintosh/.test(ua)) {
+  if (/Safari\//.test(ua) && /Macintosh/.test(ua) && !/Chrome\/|Chromium\/|OPR\//.test(ua)) {
     return {
       platform: 'desktop',
       steps: ['No Safari do Mac, abra o menu Arquivo.', 'Escolha “Adicionar ao Dock”.'],
+      separateStorage: true,
     };
   }
 

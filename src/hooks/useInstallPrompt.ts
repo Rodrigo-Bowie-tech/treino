@@ -28,7 +28,8 @@ export function isStandalone(): boolean {
   );
 }
 
-export function useInstallPrompt(): (() => Promise<void>) | null {
+/** Abre o convite de instalação do navegador; devolve se a pessoa aceitou. */
+export function useInstallPrompt(): (() => Promise<'accepted' | 'dismissed'>) | null {
   const [, force] = useState(0);
   useEffect(() => {
     const l = () => force((n) => n + 1);
@@ -40,10 +41,11 @@ export function useInstallPrompt(): (() => Promise<void>) | null {
   if (!deferred) return null;
   return async () => {
     const event = deferred;
-    if (!event) return;
+    if (!event) return 'dismissed';
     await event.prompt();
-    await event.userChoice;
+    const { outcome } = await event.userChoice;
     deferred = null;
     listeners.forEach((l) => l());
+    return outcome;
   };
 }

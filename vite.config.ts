@@ -12,7 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
-        id: './',
+        // Absoluto: um id relativo seria resolvido contra a raiz do site e coincidiria com o do Treino antigo.
+        id: '/treino/',
         name: 'Treino — braços e fascite plantar',
         short_name: 'Treino',
         description:

@@ -26,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
           iconSrc="./icons/icon-192.png"
           dismissKey="treino:instalar-dispensado"
           quietRoutes={['/sessao', '/conectar']}
+          dataNote="No iPhone, o app instalado começa vazio: abra o app, entre em Ajustes → Sincronização e conecte de novo (cole o código) para trazer seus treinos."
         />
       </ToastProvider>
     </HashRouter>
