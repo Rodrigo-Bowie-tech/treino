@@ -138,7 +138,13 @@ export interface PlanItem {
   restSec: number;
   /** Lados a fazer, quando o exercício é de um lado de cada vez. */
   sides?: Side[];
+  /**
+   * Bi-set: dois itens seguidos com o mesmo número são feitos alternando as
+   * séries (série 1 de um, série 1 do outro, descanso, série 2...).
+   */
+  superset?: number;
   target?: Target;
+  /** Tempo estimado do item (num bi-set, o descanso entra no primeiro item). */
   estSec: number;
 }
 

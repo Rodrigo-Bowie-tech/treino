@@ -152,6 +152,26 @@
   --phase-color: #3987e5;
 }
 
+.superset {
+  display: flex;
+  flex-direction: column;
+  padding-top: 10px;
+}
+
+.superset-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.superset > .list {
+  margin-top: 2px;
+  padding-left: 10px;
+  border-left: 2px dashed var(--accent);
+}
+
 /* ——— Player ——— */
 
 .app.in-session .content {

@@ -27,6 +27,12 @@ describe('progressão', () => {
     expect(nextLoad(12)).toBe(14);
   });
 
+  it('a série extra não segura nem baixa a progressão', () => {
+    const t = suggestTarget(curl, entry([{ reps: 12, load: 8 }, { reps: 12, load: 8 }, { reps: 12, load: 8 }, { reps: 9, load: 8 }]));
+    expect(t.load).toBe(9);
+    expect(t.reps).toBe(8);
+  });
+
   it('não sobe o peso se faltou alguma série', () => {
     const t = suggestTarget(curl, entry([{ reps: 12, load: 8 }, { reps: 12, load: 8 }]));
     expect(t.load).toBe(8);
@@ -36,7 +42,7 @@ describe('progressão', () => {
     const heel = getExercise('fa-elevacao') as RepsExercise;
     expect(suggestTarget(heel, undefined).note).toContain('sem peso extra');
     const done = { exerciseId: heel.id, phase: 'fascite' as const, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] };
-    expect(suggestTarget(heel, done).note).toContain('pé afetado');
+    expect(suggestTarget(heel, done).note).toContain('num pé só');
   });
 
   it('sem carga, pede uma versão mais difícil ao chegar no máximo', () => {

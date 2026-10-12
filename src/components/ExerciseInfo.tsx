@@ -15,16 +15,16 @@ export function ExerciseTags({ ex }: { ex: Exercise }) {
 }
 
 /** Abre no YouTube vídeos de como fazer o exercício. */
-export function VideoLink({ ex }: { ex: Exercise }) {
+export function VideoLink({ ex, onOpen }: { ex: Exercise; onOpen?: () => void }) {
   return (
-    <a className="btn secondary small video-link" href={videoUrl(ex)} target="_blank" rel="noopener noreferrer">
+    <a className="btn secondary small video-link" href={videoUrl(ex)} target="_blank" rel="noopener noreferrer" onClick={onOpen}>
       <CirclePlay size={18} aria-hidden /> Ver vídeos no YouTube
     </a>
   );
 }
 
 /** Como fazer o exercício: passos, cadência, material, dica e cuidados. */
-export function ExerciseInfo({ ex, compact }: { ex: Exercise; compact?: boolean }) {
+export function ExerciseInfo({ ex, compact, onVideo }: { ex: Exercise; compact?: boolean; /** Ao abrir o vídeo (ex.: pausar o treino). */ onVideo?: () => void }) {
   return (
     <div className="exercise-info">
       {!compact && <ExerciseTags ex={ex} />}
@@ -59,7 +59,7 @@ export function ExerciseInfo({ ex, compact }: { ex: Exercise; compact?: boolean 
           </div>
         </div>
       )}
-      <VideoLink ex={ex} />
+      <VideoLink ex={ex} onOpen={onVideo} />
     </div>
   );
 }

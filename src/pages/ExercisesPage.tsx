@@ -12,7 +12,10 @@ const CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
 function prescription(ex: Exercise): string {
   const each = ex.perSide ? ' cada lado' : '';
-  if (ex.kind === 'reps') return `${ex.sets} × ${ex.reps[0]}–${ex.reps[1]}${each}`;
+  if (ex.kind === 'reps') {
+    const [min, max] = ex.reps;
+    return `${ex.sets} × ${min === max ? min : `${min}–${max}`}${each}`;
+  }
   const time = ex.seconds >= 60 && ex.seconds % 30 === 0 ? `${(ex.seconds / 60).toLocaleString('pt-BR')} min` : `${ex.seconds} s`;
   return (ex.sets ?? 1) > 1 ? `${ex.sets} × ${time}${each}` : `${time}${each}`;
 }

@@ -99,6 +99,30 @@ describe('treino em andamento', () => {
     expect(after.log.at(-1)).toEqual({ item: step.item, set: 1, data: { reps: 10, load: 8 }, at: at + sec(60) });
   });
 
+  it('no bi-set alterna as séries dos dois exercícios e registra cada um', () => {
+    let s = start();
+    const curl = plan.items.findIndex((i) => i.exerciseId === 'bi-rosca-direta');
+    const partner = curl + 1;
+    expect(plan.items[partner].superset).toBe(plan.items[curl].superset);
+    let at = T0;
+    // Pula até a primeira série da rosca.
+    while (!(currentStep(s)!.kind === 'serie' && currentStep(s)!.item === curl)) {
+      at += 1000;
+      s = currentStep(s)!.kind === 'serie' ? logSet(s, { reps: 10 }, at) : next(s, at);
+    }
+    s = logSet(s, { reps: 12, load: 8 }, (at += 1000));
+    expect(currentStep(s)).toMatchObject({ kind: 'prep', item: partner, switch: true });
+    s = tick(s, (at += 16_000)).session; // a troca leva 15 s
+    expect(currentStep(s)).toMatchObject({ kind: 'serie', item: partner, set: 1 });
+    s = logSet(s, { reps: 11, load: 6 }, (at += 1000));
+    expect(currentStep(s)).toMatchObject({ kind: 'descanso', item: curl, set: 1 });
+    s = next(s, (at += 1000));
+    expect(currentStep(s)).toMatchObject({ kind: 'serie', item: curl, set: 2 });
+    const record = toRecord(s, at, 'encerrado');
+    expect(record.entries.find((e) => e.exerciseId === 'bi-rosca-direta')!.sets).toEqual([{ reps: 12, load: 8 }]);
+    expect(record.entries.find((e) => e.exerciseId === plan.items[partner].exerciseId)!.sets).toEqual([{ reps: 11, load: 6 }]);
+  });
+
   it('limita o treino a 1 hora', () => {
     const s = start();
     expect(limitReached(s, T0 + sec(SESSION_LIMIT_SEC - 1))).toBe(false);

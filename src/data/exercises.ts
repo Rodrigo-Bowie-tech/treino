@@ -281,7 +281,7 @@ const FASCIITIS: Exercise[] = [
       'Fique na borda de um degrau com uma toalha enrolada sob os dedos dos pés, de modo que fiquem dobrados para cima, e os calcanhares para fora do degrau.',
       'Segure no corrimão ou na parede só para se equilibrar.',
       'Suba na ponta dos pés em 3 s, segure 2 s lá em cima e desça em 3 s, até o calcanhar passar um pouco abaixo do degrau.',
-      'Comece com os dois pés. Quando 3 × 12 ficar fácil, faça só com o pé afetado; depois, segure um halter na mão do mesmo lado (registre a carga).',
+      'Comece com os dois pés. Quando 3 × 12 ficar fácil: se a fascite é num pé só, faça só com ele; se é nos dois, continue com os dois pés segurando um halter (registre a carga).',
     ],
     tip: 'É o fortalecimento com melhor resultado para a fascite. Entra de 2 em 2 treinos, para o pé recuperar.',
     caution: 'Desconforto leve é esperado. Se a dor ficar forte ou piorar no dia seguinte, reduza as repetições.',
@@ -425,6 +425,7 @@ const FASCIITIS: Exercise[] = [
       'Dobre o joelho da frente e leve o quadril em direção à parede até sentir a panturrilha alongar.',
       'Na 2ª série, dobre um pouco o joelho de trás, sem tirar o calcanhar do chão (alonga o sóleo).',
     ],
+    tip: 'Alternativa ao alongamento no degrau, para quando não houver um degrau por perto.',
     video: 'alongamento de panturrilha na parede',
   },
   {
@@ -442,6 +443,7 @@ const FASCIITIS: Exercise[] = [
       'Passe a toalha pela planta do pé e segure as pontas.',
       'Puxe trazendo os dedos em sua direção, mantendo o joelho reto.',
     ],
+    tip: 'Alternativa ao alongamento no degrau; bom também ao acordar, ainda na cama.',
     video: 'alongamento com toalha panturrilha e fáscia plantar',
   },
 ];
@@ -1113,19 +1115,19 @@ export const WARMUP_FIXED = ['aq-mobilidade', 'aq-polichinelo', 'aq-prancha'];
 export const FASCIITIS_CORE = ['fa-fascia', 'fa-alongamento-degrau'];
 /** Fortalecimento da fascite, feito em treinos alternados (para o pé recuperar). */
 export const FASCIITIS_STRENGTH = 'fa-elevacao';
+/** Alongamentos de panturrilha para quem não tem degrau: ficam na lista, mas não entram no rodízio. */
+export const FASCIITIS_ALTERNATIVES = ['fa-panturrilha', 'fa-toalha-alongamento'];
 
-/** Ordem dos grupos no bloco de braços: bíceps e tríceps aparecem mais, porque são eles que dão volume ao braço. */
-export const ARM_GROUP_ORDER: Category[] = [
-  'biceps',
-  'triceps',
-  'ombros',
-  'biceps',
-  'triceps',
-  'antebraco',
-  'biceps',
-  'triceps',
-  'ombros',
-  'antebraco',
-  'biceps',
-  'triceps',
+/**
+ * Blocos de braço, em ordem de prioridade: cada bloco é um bi-set (dois
+ * exercícios alternando as séries). Bíceps + tríceps aparecem mais, porque são
+ * eles que dão volume ao braço; ombros + antebraço ficam para o fim do treino.
+ */
+export const ARM_BLOCKS: [Category, Category][] = [
+  ['biceps', 'triceps'],
+  ['biceps', 'triceps'],
+  ['ombros', 'antebraco'],
+  ['biceps', 'triceps'],
+  ['ombros', 'antebraco'],
+  ['biceps', 'triceps'],
 ];

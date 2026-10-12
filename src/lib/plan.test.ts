@@ -3,7 +3,7 @@ import { defaultSettings } from '../db';
 import { EXERCISES, findExercise, getExercise } from '../data/exercises';
 import type { Plan, SessionRecord, Settings } from '../types';
 import { buildPlan, isAvailable, makeItem, phasesOf, prescription, warmupSec } from './plan';
-import { SESSION_LIMIT_SEC, estimateItem, expandPlan } from './steps';
+import { SESSION_LIMIT_SEC, SWITCH_SEC, estimateItems, expandPlan } from './steps';
 import { videoUrl } from './video';
 
 const settings = (changes: Partial<Settings> = {}): Settings => ({ ...defaultSettings('p1'), configured: true, ...changes });
@@ -26,6 +26,24 @@ function done(plan: Plan, day: number): SessionRecord {
     updatedAt: day,
   };
 }
+
+/** Vários treinos seguidos com os mesmos ajustes, cada um feito por completo. */
+function chain(s: Settings, days: number): Plan[] {
+  const plans: Plan[] = [];
+  let sessions: SessionRecord[] = [];
+  for (let day = 1; day <= days; day++) {
+    const plan = buildPlan(s, sessions);
+    plans.push(plan);
+    sessions = [...sessions, done(plan, day)];
+  }
+  return plans;
+}
+
+const armsOf = (p: Plan) => p.items.filter((i) => i.phase === 'bracos');
+const setsOf = (p: Plan, category: string) =>
+  armsOf(p)
+    .filter((i) => getExercise(i.exerciseId).category === category)
+    .reduce((t, i) => t + i.sets, 0);
 
 const combos: Settings[] = [];
 for (const durationMin of [30, 45, 60] as const) {
@@ -82,82 +100,125 @@ describe('montagem do treino', () => {
   });
 
   it('o treino de 60 minutos aproveita bem o tempo e foca nos braços', () => {
-    const plan = buildPlan(settings({ equipment: ['halteres', 'banco'] }), []);
-    const phases = Object.fromEntries(phasesOf(plan).map((p) => [p.phase, p]));
-    expect(plan.totalSec).toBeGreaterThan(58 * 60);
-    expect(phases.bracos.seconds).toBeGreaterThanOrEqual(30 * 60);
-    expect(phases.bracos.items.length).toBeGreaterThanOrEqual(7);
-    expect(phases.bracos.items.reduce((t, i) => t + i.sets, 0)).toBeGreaterThanOrEqual(21);
-    const groups = phases.bracos.items.map((i) => getExercise(i.exerciseId).category);
-    expect(new Set(groups)).toEqual(new Set(['biceps', 'triceps', 'ombros', 'antebraco']));
-    expect(groups.filter((g) => g === 'biceps').length).toBeGreaterThanOrEqual(3);
-    expect(groups.filter((g) => g === 'triceps').length).toBeGreaterThanOrEqual(2);
+    for (const plan of chain(settings({ equipment: ['halteres', 'banco'] }), 10)) {
+      const phases = Object.fromEntries(phasesOf(plan).map((p) => [p.phase, p]));
+      expect(plan.totalSec).toBeGreaterThan(57 * 60);
+      expect(phases.bracos.seconds).toBeGreaterThanOrEqual(30 * 60);
+      expect(armsOf(plan).reduce((t, i) => t + i.sets, 0)).toBeGreaterThanOrEqual(24);
+      expect(setsOf(plan, 'biceps')).toBeGreaterThanOrEqual(9);
+      expect(setsOf(plan, 'triceps')).toBeGreaterThanOrEqual(9);
+      expect(setsOf(plan, 'ombros')).toBeGreaterThanOrEqual(3);
+      expect(setsOf(plan, 'antebraco')).toBeGreaterThanOrEqual(3);
+    }
   });
 
-  it('nos treinos de 30 e 45 minutos os braços ficam com mais da metade do tempo', () => {
-    const minimum = { 30: { min: 15, items: 4 }, 45: { min: 22, items: 5 }, 60: { min: 30, items: 7 } };
+  it('nos treinos de 30 e 45 minutos os braços continuam sendo a maior parte', () => {
+    const minimum = { 30: { min: 14.5, sets: 12 }, 45: { min: 21, sets: 15 }, 60: { min: 30, sets: 24 } };
     for (const durationMin of [30, 45, 60] as const) {
-      for (const sessions of [[], [done(buildPlan(settings({ durationMin }), []), 1)]]) {
-        const plan = buildPlan(settings({ durationMin, equipment: ['halteres', 'banco'] }), sessions);
-        const arms = plan.items.filter((i) => i.phase === 'bracos');
-        const armSec = arms.reduce((t, i) => t + i.estSec, 0);
-        expect(plan.totalSec).toBeGreaterThan((durationMin - 2) * 60);
-        expect(armSec).toBeGreaterThan(plan.totalSec / 2);
-        expect(armSec).toBeGreaterThanOrEqual(minimum[durationMin].min * 60);
-        expect(arms.length).toBeGreaterThanOrEqual(minimum[durationMin].items);
+      for (const footSide of ['ambos', 'direito'] as const) {
+        for (const plan of chain(settings({ durationMin, footSide, equipment: ['halteres', 'banco'] }), 8)) {
+          const phases = phasesOf(plan);
+          const arms = phases.find((p) => p.phase === 'bracos')!;
+          expect(plan.totalSec).toBeGreaterThan((durationMin - 2.5) * 60);
+          for (const other of phases) if (other !== arms) expect(arms.seconds).toBeGreaterThan(other.seconds);
+          expect(arms.seconds).toBeGreaterThanOrEqual(plan.totalSec * 0.48);
+          expect(arms.seconds).toBeGreaterThanOrEqual(minimum[durationMin].min * 60);
+          expect(armsOf(plan).reduce((t, i) => t + i.sets, 0)).toBeGreaterThanOrEqual(minimum[durationMin].sets);
+          expect(setsOf(plan, 'biceps')).toBeGreaterThanOrEqual(6);
+          expect(setsOf(plan, 'triceps')).toBeGreaterThanOrEqual(6);
+        }
       }
+    }
+  });
+
+  it('os braços são feitos em bi-sets: bíceps com tríceps, ombros com antebraço', () => {
+    for (const plan of chain(settings({ equipment: ['halteres', 'banco'] }), 6)) {
+      const arms = armsOf(plan);
+      const pairs = new Map<number, string[]>();
+      for (const it of arms) {
+        if (it.superset == null) continue;
+        pairs.set(it.superset, [...(pairs.get(it.superset) ?? []), getExercise(it.exerciseId).category]);
+      }
+      expect(pairs.size).toBeGreaterThanOrEqual(3);
+      for (const cats of pairs.values()) {
+        expect([['biceps', 'triceps'], ['ombros', 'antebraco']]).toContainEqual(cats);
+      }
+      // Os dois itens de cada bi-set ficam lado a lado e com o mesmo número de séries.
+      arms.forEach((it, i) => {
+        if (it.superset == null) return;
+        const partner = arms.find((o, j) => j !== i && o.superset === it.superset)!;
+        expect(Math.abs(arms.indexOf(partner) - i)).toBe(1);
+        expect(partner.sets).toBe(it.sets);
+      });
+      // Ombros e antebraço por último: a pegada cansada atrapalharia as roscas.
+      const cats = arms.map((i) => getExercise(i.exerciseId).category);
+      const lastCurl = cats.lastIndexOf('biceps');
+      const firstForearm = cats.indexOf('antebraco');
+      if (firstForearm >= 0) expect(firstForearm).toBeGreaterThan(lastCurl);
     }
   });
 
   it('o tempo que sobra vira séries extras, no máximo uma a mais por exercício', () => {
     for (const s of combos) {
-      for (const item of buildPlan(s, []).items) {
-        const ex = getExercise(item.exerciseId);
-        if (item.phase === 'bracos' && ex.kind === 'reps') {
-          expect(item.sets).toBeGreaterThanOrEqual(ex.sets);
-          expect(item.sets).toBeLessThanOrEqual(ex.sets + 1);
-        } else {
-          expect(item.sets).toBe(ex.sets ?? 1);
+      for (const plan of chain(s, 3)) {
+        for (const item of plan.items) {
+          const ex = getExercise(item.exerciseId);
+          if (item.phase === 'bracos' && ex.kind === 'reps') {
+            expect(item.sets).toBeGreaterThanOrEqual(ex.sets);
+            expect(item.sets).toBeLessThanOrEqual(ex.sets + 1);
+          } else if (item.phase === 'fascite' && s.durationMin === 30) {
+            // No treino de 30 min a fascite fica mais curta.
+            expect(item.sets).toBe(ex.kind === 'reps' ? Math.min(ex.sets, 2) : 1);
+          } else {
+            expect(item.sets).toBe(ex.sets ?? 1);
+          }
         }
       }
     }
-    const plan = buildPlan(settings({ equipment: ['halteres', 'banco'] }), []);
-    expect(plan.items.some((i) => i.phase === 'bracos' && i.sets === 4)).toBe(true);
   });
 
-  it('inclui sempre os alongamentos da fascite e alterna o fortalecimento no degrau', () => {
-    let sessions: SessionRecord[] = [];
-    const withStrength: boolean[] = [];
-    for (let day = 1; day <= 4; day++) {
-      const plan = buildPlan(settings(), sessions);
-      const ids = plan.items.filter((i) => i.phase === 'fascite').map((i) => i.exerciseId);
-      expect(ids.slice(0, 1)).toEqual(['fa-fascia']);
-      expect(ids).toContain('fa-alongamento-degrau');
-      withStrength.push(ids.includes('fa-elevacao'));
-      sessions = [...sessions, done(plan, day)];
+  it('em toda duração: alongamentos da fascite sempre e o fortalecimento no degrau de 2 em 2 treinos', () => {
+    for (const durationMin of [30, 45, 60] as const) {
+      for (const footSide of ['ambos', 'esquerdo'] as const) {
+        const withStrength: boolean[] = [];
+        for (const plan of chain(settings({ durationMin, footSide, equipment: ['halteres', 'banco'] }), 6)) {
+          const ids = plan.items.filter((i) => i.phase === 'fascite').map((i) => i.exerciseId);
+          expect(ids[0]).toBe('fa-fascia');
+          expect(ids).toContain('fa-alongamento-degrau');
+          // Os alongamentos alternativos (sem degrau) não tomam o lugar dos exercícios do pé.
+          expect(ids).not.toContain('fa-panturrilha');
+          expect(ids).not.toContain('fa-toalha-alongamento');
+          withStrength.push(ids.includes('fa-elevacao'));
+          // O fortalecimento vem antes do alongamento no degrau.
+          if (ids.includes('fa-elevacao')) expect(ids.indexOf('fa-elevacao')).toBeLessThan(ids.indexOf('fa-alongamento-degrau'));
+        }
+        expect(withStrength).toEqual([true, false, true, false, true, false]);
+      }
     }
-    expect(withStrength).toEqual([true, false, true, false]);
   });
 
   it('nos dias sem fortalecimento entram os exercícios do pé com toalha e bolinha', () => {
-    const s = settings({ equipment: ['halteres', 'banco'] });
-    const first = buildPlan(s, []);
-    const second = buildPlan(s, [done(first, 1)]);
-    const ids = second.items.filter((i) => i.phase === 'fascite').map((i) => i.exerciseId);
-    expect(ids).not.toContain('fa-elevacao');
-    expect(ids.length).toBeGreaterThanOrEqual(4);
-    expect(ids).toEqual(expect.arrayContaining(['fa-rolar', 'fa-toalha-dedos']));
+    for (const durationMin of [30, 45, 60] as const) {
+      const [, second] = chain(settings({ durationMin, equipment: ['halteres', 'banco'] }), 2);
+      const ids = second.items.filter((i) => i.phase === 'fascite').map((i) => i.exerciseId);
+      expect(ids).not.toContain('fa-elevacao');
+      expect(ids.length).toBeGreaterThanOrEqual(durationMin === 30 ? 3 : 4);
+      expect(ids).toContain('fa-rolar');
+      if (durationMin > 30) expect(ids).toContain('fa-toalha-dedos');
+    }
   });
 
-  it('em todas as durações a fascite cabe no orçamento e mantém o alongamento da fáscia', () => {
+  it('o rodízio do pé respeita o orçamento; os alongamentos e o fortalecimento entram sempre', () => {
+    const budget = { 30: 300, 45: 480, 60: 600 };
     for (const s of combos.filter((c) => c.fasciitis)) {
-      let sessions: SessionRecord[] = [];
-      for (let day = 1; day <= 4; day++) {
-        const plan = buildPlan(s, sessions);
+      for (const plan of chain(s, 4)) {
         const fasciitis = plan.items.filter((i) => i.phase === 'fascite');
-        expect(fasciitis[0]?.exerciseId).toBe('fa-fascia');
-        expect(fasciitis.reduce((t, i) => t + i.estSec, 0)).toBeLessThanOrEqual({ 30: 240, 45: 510, 60: 600 }[s.durationMin]);
-        sessions = [...sessions, done(plan, day)];
+        const always = fasciitis.filter((i) => ['fa-fascia', 'fa-alongamento-degrau', 'fa-elevacao'].includes(i.exerciseId));
+        const rotation = fasciitis.filter((i) => !always.includes(i));
+        const total = (list: typeof fasciitis) => list.reduce((t, i) => t + i.estSec, 0);
+        if (rotation.length) expect(total(fasciitis)).toBeLessThanOrEqual(budget[s.durationMin]);
+        // O bloco obrigatório nunca passa de 10 min.
+        expect(total(always)).toBeLessThanOrEqual(10 * 60);
       }
     }
   });
@@ -176,8 +237,8 @@ describe('montagem do treino', () => {
     const withF = buildPlan(settings({ equipment: ['halteres'] }), []);
     const without = buildPlan(settings({ equipment: ['halteres'], fasciitis: false }), []);
     expect(without.items.some((i) => i.phase === 'fascite')).toBe(false);
-    const arms = (p: Plan) => p.items.filter((i) => i.phase === 'bracos').length;
-    expect(arms(without)).toBeGreaterThan(arms(withF));
+    const armSets = (p: Plan) => armsOf(p).reduce((t, i) => t + i.sets, 0);
+    expect(armSets(without)).toBeGreaterThan(armSets(withF));
   });
 
   it('usa só os equipamentos disponíveis e troca as alternativas caseiras pelos halteres', () => {
@@ -224,12 +285,26 @@ describe('montagem do treino', () => {
   });
 
   it('a estimativa de cada item bate com as etapas do player', () => {
+    for (const s of combos) {
+      for (const plan of chain(s, 2)) expect(estimateItems(plan.items)).toEqual(plan.items.map((i) => i.estSec));
+    }
     const plan = buildPlan(settings({ equipment: ['halteres'] }), []);
-    for (const item of plan.items) expect(estimateItem(item)).toBe(item.estSec);
     const steps = expandPlan(plan);
+    // Bi-set: série de um, troca, série do outro, descanso, e assim por diante.
     const curl = plan.items.findIndex((i) => i.exerciseId === 'bi-rosca-direta');
-    const series = Array.from({ length: plan.items[curl].sets }, () => ['serie', 'descanso']).flat().slice(0, -1);
-    expect(steps.filter((s) => s.item === curl).map((s) => s.kind)).toEqual(['prep', ...series]);
+    expect(plan.items[curl + 1].superset).toBe(plan.items[curl].superset);
+    const pair = steps.filter((st) => st.item === curl || st.item === curl + 1);
+    const rounds = plan.items[curl].sets;
+    const expected = [{ kind: 'prep', item: curl }];
+    for (let set = 1; set <= rounds; set++) {
+      expected.push({ kind: 'serie', item: curl }, { kind: 'prep', item: curl + 1 }, { kind: 'serie', item: curl + 1 });
+      if (set < rounds) expected.push({ kind: 'descanso', item: curl });
+    }
+    expect(pair.map((st) => ({ kind: st.kind, item: st.item }))).toEqual(expected);
+    expect(pair.filter((st) => st.kind === 'prep' && st.item === curl + 1).every((st) => st.kind === 'prep' && st.switch && st.seconds === SWITCH_SEC)).toBe(true);
+    // Os passos de cada bi-set ficam juntos (nada de outro exercício no meio).
+    const firstOfPair = steps.findIndex((st) => st.item === curl);
+    expect(steps.slice(firstOfPair, firstOfPair + pair.length)).toEqual(pair);
     const warm = steps.filter((s) => plan.items[s.item].phase === 'aquecimento');
     // Aquecimento corrido: só etapas por tempo (exercício e descanso curto entre as séries).
     expect(warm.every((s) => s.kind === 'tempo' || s.kind === 'descanso')).toBe(true);

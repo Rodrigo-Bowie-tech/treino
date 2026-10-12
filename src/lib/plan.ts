@@ -1,6 +1,7 @@
 import {
-  ARM_GROUP_ORDER,
+  ARM_BLOCKS,
   EXERCISES,
+  FASCIITIS_ALTERNATIVES,
   FASCIITIS_CORE,
   FASCIITIS_STRENGTH,
   WARMUP_FIXED,
@@ -8,20 +9,21 @@ import {
   byCategory,
   getExercise,
 } from '../data/exercises';
-import type { Exercise, Phase, Plan, PlanItem, SessionRecord, Settings, Side } from '../types';
+import type { Category, Exercise, Phase, Plan, PlanItem, SessionRecord, Settings, Side } from '../types';
 import { lastEntries, liveSessions, suggestTarget } from './progress';
-import { estimateItem } from './steps';
+import { estimateItem, estimateItems } from './steps';
 
 const BOTH_SIDES: Side[] = ['esquerdo', 'direito'];
 
 /**
  * Tempo (em segundos) de cada bloco para cada duração. O aquecimento tem
- * exatamente esse tempo; fascite e alongamento usam no máximo isso; o resto
- * todo vai para os braços.
+ * exatamente esse tempo; o alongamento final usa no máximo isso; na fascite,
+ * os alongamentos e o fortalecimento do dia entram sempre e o orçamento limita
+ * só os exercícios do pé em rodízio. O resto todo vai para os braços.
  */
 export const BUDGETS: Record<Settings['durationMin'], { aquecimento: number; fascite: number; alongamento: number }> = {
-  30: { aquecimento: 7 * 60, fascite: 4 * 60, alongamento: 2 * 60 },
-  45: { aquecimento: 10 * 60, fascite: 8.5 * 60, alongamento: 2 * 60 },
+  30: { aquecimento: 7 * 60, fascite: 5 * 60, alongamento: 1 * 60 },
+  45: { aquecimento: 10 * 60, fascite: 8 * 60, alongamento: 2 * 60 },
   60: { aquecimento: 15 * 60, fascite: 10 * 60, alongamento: 3 * 60 },
 };
 
@@ -132,7 +134,8 @@ function buildWarmup(settings: Settings, item: (ex: Exercise, phase: Phase) => P
 /**
  * Fascite: alongamento da fáscia e da panturrilha no degrau em todo treino; a
  * elevação de calcanhar no degrau de 2 em 2 treinos; e, no tempo que sobrar,
- * os exercícios do pé (toalha, bolinhas, equilíbrio...) em rodízio.
+ * os exercícios do pé (toalha, bolinhas, equilíbrio...) em rodízio. No treino
+ * de 30 min, tudo fica mais curto (uma série nos alongamentos, duas na elevação).
  */
 function buildFasciitis(
   settings: Settings,
@@ -141,65 +144,120 @@ function buildFasciitis(
   history: ReturnType<typeof lastEntries>,
 ) {
   if (!settings.fasciitis) return [];
+  const short = settings.durationMin === 30;
+  const make = (ex: Exercise) => {
+    const it = item(ex, 'fascite');
+    if (short && it.sets > 1) {
+      it.sets = ex.kind === 'reps' ? Math.min(it.sets, 2) : 1;
+      it.estSec = estimateItem(it);
+    }
+    return it;
+  };
   const lastWithFasciitis = liveSessions(sessions).find((s) => s.entries.some((e) => e.phase === 'fascite'));
   const strengthLastTime = !!lastWithFasciitis?.entries.some((e) => e.exerciseId === FASCIITIS_STRENGTH && e.sets.length);
   const [first, ...restOfCore] = FASCIITIS_CORE.map((id) => getExercise(id));
+  // O fortalecimento vem logo depois do alongamento da fáscia e antes do alongamento da panturrilha no degrau.
+  const always = [first, ...(strengthLastTime ? [] : [getExercise(FASCIITIS_STRENGTH)]), ...restOfCore].map(make);
   const others = leastRecent(
     byCategory('fascite').filter(
-      (ex) => !FASCIITIS_CORE.includes(ex.id) && ex.id !== FASCIITIS_STRENGTH && isAvailable(ex, settings),
+      (ex) =>
+        !FASCIITIS_CORE.includes(ex.id) &&
+        ex.id !== FASCIITIS_STRENGTH &&
+        !FASCIITIS_ALTERNATIVES.includes(ex.id) &&
+        isAvailable(ex, settings),
     ),
     history,
   );
-  // O fortalecimento vem logo depois do alongamento da fáscia e antes do alongamento da panturrilha no degrau.
-  const order = [first, ...(strengthLastTime ? [] : [getExercise(FASCIITIS_STRENGTH)]), ...restOfCore, ...others];
-  return fill(
-    order.map((ex) => item(ex, 'fascite')),
-    BUDGETS[settings.durationMin].fascite,
-  );
+  return fill(others.map(make), BUDGETS[settings.durationMin].fascite, always);
+}
+
+/** Um bloco de braço: um exercício sozinho ou um bi-set de dois. */
+type ArmBlock = PlanItem[];
+
+function blockSec(block: ArmBlock): number {
+  return estimateItems(block).reduce((t, s) => t + s, 0);
+}
+
+/** Recalcula o tempo de cada item do bloco (num bi-set, o descanso entra no primeiro). */
+function estimateBlock(block: ArmBlock): void {
+  estimateItems(block).forEach((sec, i) => (block[i].estSec = sec));
 }
 
 /**
- * Braços: um exercício por vez de cada grupo (bíceps, tríceps, ombros, bíceps,
- * tríceps, antebraço...), começando pelos feitos há mais tempo, até preencher o
- * tempo. O que sobrar vira séries extras, primeiro nos exercícios do começo.
+ * Braços em bi-sets (dois exercícios alternando as séries, com um descanso por
+ * rodada), o que cabe mais séries no mesmo tempo: bíceps + tríceps primeiro,
+ * depois ombros + antebraço, começando pelos exercícios feitos há mais tempo.
+ * O que sobrar vira uma rodada (ou série) extra, primeiro nos blocos do começo.
  */
 function buildArms(settings: Settings, budget: number, item: (ex: Exercise, phase: Phase) => PlanItem, history: ReturnType<typeof lastEntries>) {
-  const arms: PlanItem[] = [];
   const chosen = new Set<string>();
-  let used = 0;
-  for (const group of ARM_GROUP_ORDER) {
-    const candidates = leastRecent(
-      byCategory(group).filter((ex) => isAvailable(ex, settings) && !chosen.has(ex.id)),
+  const candidates = (group: Category) =>
+    leastRecent(
+      EXERCISES.filter((ex) => ex.category === group && isAvailable(ex, settings) && !chosen.has(ex.id)),
       history,
     );
-    for (const ex of candidates) {
-      const it = item(ex, 'bracos');
-      if (used + it.estSec <= budget) {
-        arms.push(it);
-        chosen.add(ex.id);
-        used += it.estSec;
-        break;
+  const blocks: ArmBlock[] = [];
+  let used = 0;
+  let superset = 0;
+
+  for (const [g1, g2] of ARM_BLOCKS) {
+    let picked: ArmBlock | undefined;
+    // Bi-set: o primeiro par (do feito há mais tempo) que couber.
+    search: for (const a of candidates(g1)) {
+      // Dois exercícios de um lado de cada vez no mesmo bi-set demoram demais: com um deles, o par vem antes.
+      const partners = candidates(g2).sort((x, y) => Number(!!a.perSide && !!x.perSide) - Number(!!a.perSide && !!y.perSide));
+      for (const b of partners) {
+        const pair = [item(a, 'bracos'), item(b, 'bracos')];
+        pair.forEach((it) => (it.superset = superset));
+        if (used + blockSec(pair) <= budget) {
+          picked = pair;
+          break search;
+        }
       }
     }
+    // Sem par que caiba (ou sem exercício de um dos grupos): um exercício sozinho.
+    if (!picked) {
+      for (const ex of [...candidates(g1), ...candidates(g2)]) {
+        const single = [item(ex, 'bracos')];
+        if (used + blockSec(single) <= budget) {
+          picked = single;
+          break;
+        }
+      }
+    }
+    if (!picked) continue;
+    if (picked.length === 2) superset++;
+    else picked[0].superset = undefined;
+    estimateBlock(picked);
+    picked.forEach((it) => chosen.add(it.exerciseId));
+    blocks.push(picked);
+    used += blockSec(picked);
   }
 
+  // Tempo que sobrou: uma rodada a mais em cada bloco, do primeiro para o último.
   let added = true;
   while (added) {
     added = false;
-    for (const it of arms) {
-      const ex = getExercise(it.exerciseId);
-      if (ex.kind !== 'reps' || it.sets >= ex.sets + MAX_EXTRA_SETS) continue;
-      const bigger = { ...it, sets: it.sets + 1 };
-      const est = estimateItem(bigger);
-      if (used - it.estSec + est <= budget) {
-        used += est - it.estSec;
-        it.sets = bigger.sets;
-        it.estSec = est;
+    for (const block of blocks) {
+      const room = block.every((it) => {
+        const ex = getExercise(it.exerciseId);
+        return ex.kind === 'reps' && it.sets < ex.sets + MAX_EXTRA_SETS;
+      });
+      if (!room) continue;
+      const bigger = block.map((it) => ({ ...it, sets: it.sets + 1 }));
+      const extra = blockSec(bigger) - blockSec(block);
+      if (used + extra <= budget) {
+        block.forEach((it) => it.sets++);
+        estimateBlock(block);
+        used += extra;
         added = true;
       }
     }
   }
-  return arms;
+
+  // Ombros e antebraço por último (a pegada cansada atrapalharia as roscas).
+  const late = (b: ArmBlock) => b.some((it) => getExercise(it.exerciseId).category === 'antebraco');
+  return [...blocks.filter((b) => !late(b)), ...blocks.filter(late)].flat();
 }
 
 /**
