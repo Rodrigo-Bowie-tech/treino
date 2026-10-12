@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../db';
-import { buildPlan } from './plan';
+import { buildPlan, warmupSec } from './plan';
 import {
   abandonedRecord,
   activeMs,
@@ -22,11 +22,15 @@ import {
   toRecord,
   type ActiveSession,
 } from './session';
-import { SESSION_LIMIT_SEC, WARMUP_SEC } from './steps';
+import { SESSION_LIMIT_SEC } from './steps';
 
 const T0 = Date.UTC(2026, 9, 8, 18);
 const plan = buildPlan({ ...defaultSettings('p1'), configured: true, equipment: ['halteres'] }, []);
 const start = () => startSession(plan, T0, 'abc', 'p1');
+/** O trote que abre o aquecimento (um passo por tempo, sem lados). */
+const OPENER = plan.items[0].seconds!;
+/** O segundo passo: mobilidade dos braços, 60 s. */
+const SECOND = plan.items[1].seconds!;
 const sec = (n: number) => n * 1000;
 
 /** Avança o relógio até a primeira série de repetições. */
@@ -43,21 +47,25 @@ function toFirstSerie(s: ActiveSession): { s: ActiveSession; at: number } {
 describe('treino em andamento', () => {
   it('a contagem regressiva avança sozinha pelas etapas por tempo', () => {
     const s = start();
-    expect(currentStep(s)).toMatchObject({ kind: 'tempo', seconds: 120 });
-    expect(stepRemainingMs(s, T0 + sec(30))).toBe(sec(90));
-    const { session, advanced } = tick(s, T0 + sec(121));
+    expect(plan.items[0].exerciseId).toBe('aq-trote');
+    expect(plan.items[1].exerciseId).toBe('aq-mobilidade');
+    expect(OPENER).toBeGreaterThanOrEqual(60);
+    expect(currentStep(s)).toMatchObject({ kind: 'tempo', seconds: OPENER });
+    expect(stepRemainingMs(s, T0 + sec(30))).toBe(sec(OPENER - 30));
+    const { session, advanced } = tick(s, T0 + sec(OPENER + 1));
     expect(advanced).toBe(true);
     expect(session.index).toBe(1);
-    expect(stepRemainingMs(session, T0 + sec(121))).toBe(sec(29)); // tornozelo esquerdo, 30 s
-    expect(session.log).toEqual([{ item: 0, set: 1, side: undefined, data: { seconds: 120 }, at: T0 + sec(120) }]);
+    expect(stepRemainingMs(session, T0 + sec(OPENER + 1))).toBe(sec(SECOND - 1));
+    expect(session.log).toEqual([{ item: 0, set: 1, side: undefined, data: { seconds: OPENER }, at: T0 + sec(OPENER) }]);
   });
 
-  it('o aquecimento leva 15 minutos e depois vem a fascite', () => {
-    const at = T0 + sec(WARMUP_SEC);
+  it('o aquecimento leva 15 minutos no treino de 1 hora e depois vem a fascite', () => {
+    expect(warmupSec(60)).toBe(15 * 60);
+    const at = T0 + sec(warmupSec(60));
     const s = tick(start(), at).session;
     expect(currentPhase(s)).toBe('fascite');
     expect(currentStep(s)!.kind).toBe('prep');
-    expect(activeMs(s, at)).toBe(sec(WARMUP_SEC));
+    expect(activeMs(s, at)).toBe(sec(warmupSec(60)));
   });
 
   it('as pausas não contam no tempo nem no cronômetro da etapa', () => {
@@ -67,13 +75,13 @@ describe('treino em andamento', () => {
     expect(tick(s, T0 + sec(600)).advanced).toBe(false);
     s = resume(s, T0 + sec(600));
     expect(activeMs(s, T0 + sec(610))).toBe(sec(70));
-    expect(stepRemainingMs(s, T0 + sec(610))).toBe(sec(50));
+    expect(stepRemainingMs(s, T0 + sec(610))).toBe(sec(OPENER - 70));
   });
 
   it('+15 s estende a etapa atual', () => {
     const s = addTime(start(), 15);
-    expect(stepRemainingMs(s, T0)).toBe(sec(135));
-    expect(tick(s, T0 + sec(121)).advanced).toBe(false);
+    expect(stepRemainingMs(s, T0)).toBe(sec(OPENER + 15));
+    expect(tick(s, T0 + sec(OPENER + 1)).advanced).toBe(false);
   });
 
   it('pular registra o tempo já feito do exercício', () => {
@@ -130,11 +138,8 @@ describe('treino em andamento', () => {
     const record = toRecord(s, at, 'concluido');
     expect(record.entries.map((e) => e.exerciseId)).toEqual(plan.items.map((i) => i.exerciseId));
     const curl = record.entries.find((e) => e.exerciseId === 'bi-rosca-direta')!;
-    expect(curl.sets).toEqual([
-      { reps: 12, load: 6 },
-      { reps: 12, load: 6 },
-      { reps: 12, load: 6 },
-    ]);
+    const planned = plan.items.find((i) => i.exerciseId === 'bi-rosca-direta')!.sets;
+    expect(curl.sets).toEqual(Array.from({ length: planned }, () => ({ reps: 12, load: 6 })));
     expect(record.startedAt).toBe(new Date(T0).toISOString());
     expect(record.profileId).toBe('p1');
     expect(stepsOf(s).length).toBeGreaterThan(plan.items.length);
@@ -142,15 +147,15 @@ describe('treino em andamento', () => {
 
   it('treino abandonado: salva com o tempo até o último registro', () => {
     let s = start();
-    s = next(s, T0 + sec(100)); // marcha: 100 s
-    s = next(s, T0 + sec(130)); // tornozelo: 30 s
+    s = next(s, T0 + sec(50)); // trote: 50 s
+    s = next(s, T0 + sec(80)); // mobilidade: 30 s
     // App fechado; reaberto no dia seguinte, parado numa etapa por tempo que já "terminou".
     const later = T0 + sec(24 * 3600);
     expect(isAbandoned(s, later)).toBe(true);
-    expect(isAbandoned(pause(s, T0 + sec(140)), later)).toBe(false);
+    expect(isAbandoned(pause(s, T0 + sec(90)), later)).toBe(false);
     const record = abandonedRecord(s, later);
-    expect(record.activeSec).toBe(130);
+    expect(record.activeSec).toBe(80);
     expect(record.endedBy).toBe('encerrado');
-    expect(record.entries.map((e) => e.exerciseId)).toEqual(['aq-marcha', 'aq-tornozelos']);
+    expect(record.entries.map((e) => e.exerciseId)).toEqual(['aq-trote', 'aq-mobilidade']);
   });
 });

@@ -3,8 +3,6 @@ import type { Phase, Plan, PlanItem, Side } from '../types';
 
 /** Limite de cada treino: 1 hora de treino (as pausas não contam). */
 export const SESSION_LIMIT_SEC = 60 * 60;
-/** Todo treino começa com 15 minutos de aquecimento. */
-export const WARMUP_SEC = 15 * 60;
 /** Avisos antes do limite, em segundos de treino. */
 export const LIMIT_WARNINGS_SEC = [50 * 60, 55 * 60];
 

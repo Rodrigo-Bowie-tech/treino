@@ -32,7 +32,7 @@ describe('progressão', () => {
     expect(t.load).toBe(8);
   });
 
-  it('a elevação de calcanhar começa sem peso e progride para um pé só ou mochila', () => {
+  it('a elevação de calcanhar começa sem peso e progride para um pé só ou com peso', () => {
     const heel = getExercise('fa-elevacao') as RepsExercise;
     expect(suggestTarget(heel, undefined).note).toContain('sem peso extra');
     const done = { exerciseId: heel.id, phase: 'fascite' as const, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] };

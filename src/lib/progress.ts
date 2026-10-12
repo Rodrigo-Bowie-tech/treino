@@ -44,7 +44,7 @@ export function suggestTarget(ex: RepsExercise, last: SessionEntry | undefined):
   if (atTop && ex.load) {
     if (!load) {
       return ex.bodyweightFirst
-        ? { reps: min, note: `Você fez ${max} repetições em todas as séries: faça só com o pé afetado ou acrescente peso numa mochila e volte a ${min}.` }
+        ? { reps: min, note: `Você fez ${max} repetições em todas as séries: faça só com o pé afetado ou segure um halter (ou uma mochila com peso) e volte a ${min}.` }
         : { reps: min, note: `Você fez ${max} repetições em todas as séries: acrescente peso e volte a ${min}.` };
     }
     const next = nextLoad(load);

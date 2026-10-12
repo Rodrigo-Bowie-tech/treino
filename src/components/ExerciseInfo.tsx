@@ -1,15 +1,25 @@
-import { AlertTriangle, Lightbulb } from 'lucide-react';
-import { CATEGORY_LABELS, EQUIPMENT_LABELS } from '../data/exercises';
+import { AlertTriangle, CirclePlay, Lightbulb } from 'lucide-react';
+import { CATEGORY_LABELS, equipmentLabel } from '../data/exercises';
+import { videoUrl } from '../lib/video';
 import type { Exercise } from '../types';
 
 export function ExerciseTags({ ex }: { ex: Exercise }) {
   return (
     <div className="tags">
       <span className="tag">{CATEGORY_LABELS[ex.category]}</span>
-      {ex.equipment ? <span className="tag">{EQUIPMENT_LABELS[ex.equipment]}</span> : <span className="tag">Sem equipamento</span>}
+      <span className="tag">{equipmentLabel(ex) ?? 'Sem equipamento'}</span>
       {ex.seated && <span className="tag">Sentado ou deitado</span>}
       {ex.perSide && <span className="tag">Um lado de cada vez</span>}
     </div>
+  );
+}
+
+/** Abre no YouTube vídeos de como fazer o exercício. */
+export function VideoLink({ ex }: { ex: Exercise }) {
+  return (
+    <a className="btn secondary small video-link" href={videoUrl(ex)} target="_blank" rel="noopener noreferrer">
+      <CirclePlay size={18} aria-hidden /> Ver vídeos no YouTube
+    </a>
   );
 }
 
@@ -49,6 +59,7 @@ export function ExerciseInfo({ ex, compact }: { ex: Exercise; compact?: boolean 
           </div>
         </div>
       )}
+      <VideoLink ex={ex} />
     </div>
   );
 }

@@ -94,6 +94,10 @@
   gap: 12px;
 }
 
+.exercise-info .video-link {
+  align-self: flex-start;
+}
+
 .sync-line {
   display: flex;
   align-items: center;

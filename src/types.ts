@@ -1,4 +1,4 @@
-export type Equipment = 'halteres' | 'elastico' | 'barra';
+export type Equipment = 'halteres' | 'banco' | 'elastico' | 'barra';
 
 export type Category = 'aquecimento' | 'fascite' | 'biceps' | 'triceps' | 'ombros' | 'antebraco' | 'alongamento';
 
@@ -13,8 +13,8 @@ interface BaseExercise {
   id: string;
   name: string;
   category: Category;
-  /** Equipamento exigido; sem valor = feito em casa sem equipamento. */
-  equipment?: Equipment;
+  /** Equipamentos exigidos (todos); sem valor = feito em casa sem equipamento. */
+  equipment?: Equipment[];
   /** Alternativa caseira: só entra no treino de quem não tem este equipamento. */
   replaces?: Equipment;
   /** Objetos comuns usados (cadeira, toalha...), só para exibir. */
@@ -28,6 +28,8 @@ interface BaseExercise {
   perSide?: boolean;
   /** Descanso entre séries; sem valor = descanso padrão dos ajustes (ou nenhum, nos exercícios por tempo). */
   restSec?: number;
+  /** O que buscar no YouTube para ver o exercício; sem valor = o nome do exercício. */
+  video?: string;
 }
 
 /** Exercício por tempo (aquecimento, alongamentos, isometrias). */
