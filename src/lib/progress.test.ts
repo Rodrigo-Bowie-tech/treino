@@ -45,6 +45,16 @@ describe('progressão', () => {
     expect(suggestTarget(heel, done).note).toContain('num pé só');
   });
 
+  it('no treino mais curto (menos séries previstas) também progride', () => {
+    const heel = getExercise('fa-elevacao') as RepsExercise;
+    const short = { exerciseId: heel.id, phase: 'fascite' as const, sets: [{ reps: 12 }, { reps: 12 }], planned: 2 };
+    expect(suggestTarget(heel, short).note).toContain('num pé só');
+    // Sem a informação de séries previstas (registros antigos), continua exigindo as do catálogo.
+    expect(suggestTarget(heel, { ...short, planned: undefined }).reps).toBe(12);
+    const curlShort = suggestTarget(curl, { ...entry([{ reps: 12, load: 8 }, { reps: 12, load: 8 }]), planned: 2 });
+    expect(curlShort.load).toBe(9);
+  });
+
   it('sem carga, pede uma versão mais difícil ao chegar no máximo', () => {
     const t = suggestTarget(dips, { exerciseId: dips.id, phase: 'bracos', sets: [{ reps: 15 }, { reps: 15 }, { reps: 15 }] });
     expect(t.reps).toBe(15);

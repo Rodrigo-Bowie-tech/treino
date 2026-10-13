@@ -20,6 +20,7 @@ import {
   stepsOf,
   tick,
   toRecord,
+  IDLE_ABANDON_MS,
   type ActiveSession,
 } from './session';
 import { SESSION_LIMIT_SEC } from './steps';
@@ -176,7 +177,11 @@ describe('treino em andamento', () => {
     // App fechado; reaberto no dia seguinte, parado numa etapa por tempo que já "terminou".
     const later = T0 + sec(24 * 3600);
     expect(isAbandoned(s, later)).toBe(true);
-    expect(isAbandoned(pause(s, T0 + sec(90)), later)).toBe(false);
+    // Pausado (por exemplo, ao abrir um vídeo): só é dado como interrompido depois de horas parado.
+    const paused = pause(s, T0 + sec(90));
+    expect(isAbandoned(paused, T0 + sec(90) + 60 * 60 * 1000)).toBe(false);
+    expect(isAbandoned(paused, T0 + sec(90) + IDLE_ABANDON_MS + 1000)).toBe(true);
+    expect(abandonedRecord(paused, later).activeSec).toBe(90);
     const record = abandonedRecord(s, later);
     expect(record.activeSec).toBe(80);
     expect(record.endedBy).toBe('encerrado');

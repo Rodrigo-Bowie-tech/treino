@@ -62,7 +62,7 @@ export function HomePage() {
             <strong>{abandoned ? 'Treino interrompido' : 'Treino em andamento'}</strong>
             <span>
               {abandoned
-                ? 'O app foi fechado no meio do treino e o limite de 1 hora já passou. Salve o que você fez ou descarte.'
+                ? 'O treino ficou parado no meio (o app foi fechado ou ficou pausado por horas). Salve o que você fez ou descarte.'
                 : `${Math.floor(activeMs(active, Date.now()) / 60000)} min de treino até agora. Continue de onde parou ou descarte.`}
             </span>
             <div className="btn-row" style={{ marginTop: 8 }}>

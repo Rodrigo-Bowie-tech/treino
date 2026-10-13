@@ -104,6 +104,8 @@ export interface SessionEntry {
   exerciseId: string;
   phase: Phase;
   sets: SetLog[];
+  /** Séries previstas no plano daquele dia (o treino de 30 min tem menos; sem valor = as do catálogo). */
+  planned?: number;
 }
 
 export type EndReason = 'concluido' | 'limite' | 'encerrado';

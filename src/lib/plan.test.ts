@@ -124,8 +124,41 @@ describe('montagem do treino', () => {
           expect(arms.seconds).toBeGreaterThanOrEqual(plan.totalSec * 0.48);
           expect(arms.seconds).toBeGreaterThanOrEqual(minimum[durationMin].min * 60);
           expect(armsOf(plan).reduce((t, i) => t + i.sets, 0)).toBeGreaterThanOrEqual(minimum[durationMin].sets);
-          expect(setsOf(plan, 'biceps')).toBeGreaterThanOrEqual(6);
-          expect(setsOf(plan, 'triceps')).toBeGreaterThanOrEqual(6);
+          expect(setsOf(plan, 'biceps')).toBeGreaterThanOrEqual(durationMin === 30 ? 3 : 6);
+          expect(setsOf(plan, 'triceps')).toBeGreaterThanOrEqual(durationMin === 30 ? 3 : 6);
+        }
+      }
+    }
+  });
+
+  it('ombros entram pelo menos de 2 em 2 treinos, inclusive no de 30 min', () => {
+    for (const durationMin of [30, 45, 60] as const) {
+      for (const restSec of [45, 60, 90]) {
+        const plans = chain(settings({ durationMin, restSec, equipment: ['halteres', 'banco'] }), 10);
+        const withShoulders = plans.map((p) => setsOf(p, 'ombros') > 0);
+        for (let i = 1; i < withShoulders.length; i++) expect(withShoulders[i - 1] || withShoulders[i]).toBe(true);
+        // Bíceps e tríceps continuam sendo a maior parte do braço.
+        const total = (cat: string) => plans.reduce((t, p) => t + setsOf(p, cat), 0);
+        expect(total('biceps') + total('triceps')).toBeGreaterThan(total('ombros') + total('antebraco'));
+      }
+    }
+  });
+
+  it('o rodízio do aquecimento e do alongamento final não fica preso nos mesmos exercícios', () => {
+    for (const durationMin of [30, 45, 60] as const) {
+      for (const equipment of [[], ['halteres', 'banco']] as Settings['equipment'][]) {
+        const plans = chain(settings({ durationMin, equipment }), 10);
+        const count = new Map<string, number>();
+        for (const p of plans) for (const i of p.items) count.set(i.exerciseId, (count.get(i.exerciseId) ?? 0) + 1);
+        const fixed = ['aq-trote', 'aq-mobilidade', 'aq-polichinelo', 'aq-prancha'];
+        // Todos os do rodízio aparecem, e mais ou menos o mesmo número de vezes.
+        for (const category of ['aquecimento', 'alongamento']) {
+          const pool = EXERCISES.filter(
+            (e) => e.category === category && !fixed.includes(e.id) && isAvailable(e, settings({ equipment })),
+          );
+          const counts = pool.map((e) => count.get(e.id) ?? 0);
+          expect(Math.min(...counts), category).toBeGreaterThan(0);
+          expect(Math.max(...counts) - Math.min(...counts), category).toBeLessThanOrEqual(2);
         }
       }
     }

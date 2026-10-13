@@ -7,6 +7,7 @@ import {
   WARMUP_FIXED,
   WARMUP_OPENER,
   byCategory,
+  findExercise,
   getExercise,
 } from '../data/exercises';
 import type { Category, Exercise, Phase, Plan, PlanItem, SessionRecord, Settings, Side } from '../types';
@@ -77,12 +78,36 @@ export function makeItem(
   return item;
 }
 
-/** Ordena do exercício feito há mais tempo (ou nunca feito) para o mais recente; empate segue o catálogo. */
-function leastRecent(list: Exercise[], history: ReturnType<typeof lastEntries>): Exercise[] {
+/** Histórico usado no rodízio: a última vez de cada exercício e quantas vezes entrou nos treinos recentes. */
+interface Rotation {
+  last: ReturnType<typeof lastEntries>;
+  uses: Map<string, number>;
+}
+
+/** Quantos treinos recentes contam para desempatar o rodízio. */
+const RECENT_SESSIONS = 12;
+
+function rotationOf(sessions: SessionRecord[]): Rotation {
+  const uses = new Map<string, number>();
+  for (const s of liveSessions(sessions).slice(0, RECENT_SESSIONS)) {
+    for (const e of s.entries) if (e.sets.length) uses.set(e.exerciseId, (uses.get(e.exerciseId) ?? 0) + 1);
+  }
+  return { last: lastEntries(sessions), uses };
+}
+
+/**
+ * Ordena do exercício feito há mais tempo (ou nunca feito) para o mais recente.
+ * Empate (feitos no mesmo treino): primeiro o que entrou menos vezes nos treinos
+ * recentes, para o rodízio não ficar preso sempre nos mesmos; depois, o catálogo.
+ */
+function leastRecent(list: Exercise[], rotation: Rotation): Exercise[] {
   return [...list].sort((a, b) => {
-    const la = history.get(a.id)?.at ?? '';
-    const lb = history.get(b.id)?.at ?? '';
+    const la = rotation.last.get(a.id)?.at ?? '';
+    const lb = rotation.last.get(b.id)?.at ?? '';
     if (la !== lb) return la < lb ? -1 : 1;
+    const ua = rotation.uses.get(a.id) ?? 0;
+    const ub = rotation.uses.get(b.id) ?? 0;
+    if (ua !== ub) return ua - ub;
     return catalogIndex.get(a.id)! - catalogIndex.get(b.id)!;
   });
 }
@@ -111,14 +136,14 @@ function fill(candidates: PlanItem[], budget: number, start: PlanItem[] = []): P
  * polichinelo e prancha sempre; os outros exercícios variam de um treino para
  * outro; o trote do começo completa o tempo.
  */
-function buildWarmup(settings: Settings, item: (ex: Exercise, phase: Phase) => PlanItem, history: ReturnType<typeof lastEntries>) {
+function buildWarmup(settings: Settings, item: (ex: Exercise, phase: Phase) => PlanItem, rotation: Rotation) {
   const budget = warmupSec(settings.durationMin);
   const fixed = WARMUP_FIXED.map((id) => item(getExercise(id), 'aquecimento'));
   const pool = leastRecent(
     byCategory('aquecimento').filter(
       (ex) => ex.id !== WARMUP_OPENER && !WARMUP_FIXED.includes(ex.id) && isAvailable(ex, settings),
     ),
-    history,
+    rotation,
   );
   const chosen = fill(
     pool.map((ex) => item(ex, 'aquecimento')),
@@ -141,7 +166,7 @@ function buildFasciitis(
   settings: Settings,
   sessions: SessionRecord[],
   item: (ex: Exercise, phase: Phase) => PlanItem,
-  history: ReturnType<typeof lastEntries>,
+  rotation: Rotation,
 ) {
   if (!settings.fasciitis) return [];
   const short = settings.durationMin === 30;
@@ -166,7 +191,7 @@ function buildFasciitis(
         !FASCIITIS_ALTERNATIVES.includes(ex.id) &&
         isAvailable(ex, settings),
     ),
-    history,
+    rotation,
   );
   return fill(others.map(make), BUDGETS[settings.durationMin].fascite, always);
 }
@@ -189,18 +214,32 @@ function estimateBlock(block: ArmBlock): void {
  * depois ombros + antebraço, começando pelos exercícios feitos há mais tempo.
  * O que sobrar vira uma rodada (ou série) extra, primeiro nos blocos do começo.
  */
-function buildArms(settings: Settings, budget: number, item: (ex: Exercise, phase: Phase) => PlanItem, history: ReturnType<typeof lastEntries>) {
+function buildArms(
+  settings: Settings,
+  sessions: SessionRecord[],
+  budget: number,
+  item: (ex: Exercise, phase: Phase) => PlanItem,
+  rotation: Rotation,
+) {
   const chosen = new Set<string>();
   const candidates = (group: Category) =>
     leastRecent(
       EXERCISES.filter((ex) => ex.category === group && isAvailable(ex, settings) && !chosen.has(ex.id)),
-      history,
+      rotation,
     );
   const blocks: ArmBlock[] = [];
   let used = 0;
   let superset = 0;
 
-  for (const [g1, g2] of ARM_BLOCKS) {
+  // Se o último treino ficou sem ombros (comum no de 30 min), o bloco de ombros + antebraço sobe para o 2º lugar.
+  const lastArms = liveSessions(sessions).find((s) => s.entries.some((e) => e.phase === 'bracos' && e.sets.length));
+  const hadShoulders =
+    !lastArms || lastArms.entries.some((e) => e.phase === 'bracos' && e.sets.length && findExercise(e.exerciseId)?.category === 'ombros');
+  const order = [...ARM_BLOCKS];
+  const shoulders = order.findIndex((b) => b.includes('ombros'));
+  if (!hadShoulders && shoulders > 1) order.splice(1, 0, ...order.splice(shoulders, 1));
+
+  for (const [g1, g2] of order) {
     let picked: ArmBlock | undefined;
     // Bi-set: o primeiro par (do feito há mais tempo) que couber.
     search: for (const a of candidates(g1)) {
@@ -266,17 +305,17 @@ function buildArms(settings: Settings, budget: number, item: (ex: Exercise, phas
  * Os exercícios variam de um treino para outro: entram primeiro os feitos há mais tempo.
  */
 export function buildPlan(settings: Settings, sessions: SessionRecord[]): Plan {
-  const history = lastEntries(sessions);
+  const rotation = rotationOf(sessions);
   const durationMin = settings.durationMin;
-  const item = (ex: Exercise, phase: Phase) => makeItem(ex, phase, settings, history);
+  const item = (ex: Exercise, phase: Phase) => makeItem(ex, phase, settings, rotation.last);
 
-  const warmup = buildWarmup(settings, item, history);
-  const fasciitis = buildFasciitis(settings, sessions, item, history);
+  const warmup = buildWarmup(settings, item, rotation);
+  const fasciitis = buildFasciitis(settings, sessions, item, rotation);
   const cooldown = fill(
-    leastRecent(byCategory('alongamento'), history).map((ex) => item(ex, 'alongamento')),
+    leastRecent(byCategory('alongamento'), rotation).map((ex) => item(ex, 'alongamento')),
     BUDGETS[durationMin].alongamento,
   ).sort(byCatalog);
-  const arms = buildArms(settings, durationMin * 60 - sum(warmup) - sum(fasciitis) - sum(cooldown), item, history);
+  const arms = buildArms(settings, sessions, durationMin * 60 - sum(warmup) - sum(fasciitis) - sum(cooldown), item, rotation);
 
   const items = [...warmup, ...fasciitis, ...arms, ...cooldown];
   return { durationMin, items, totalSec: sum(items) };
