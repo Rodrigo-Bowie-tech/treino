@@ -1,7 +1,7 @@
 import { EQUIPMENT_LABELS } from '../data/exercises';
 import type { Equipment, FootSide, Settings } from '../types';
 
-const EQUIPMENT: Equipment[] = ['halteres', 'elastico', 'barra'];
+const EQUIPMENT: Equipment[] = ['halteres', 'banco', 'elastico', 'barra'];
 
 interface Props {
   value: Settings;
@@ -24,7 +24,10 @@ export function TrainingSettings({ value, onChange }: Props) {
             </button>
           ))}
         </div>
-        <span className="hint">Sempre com 15 min de aquecimento. Nenhum treino passa de 1 hora.</span>
+        <span className="hint">
+          Aquecimento de 15 min no treino de 60, 10 min no de 45 e 7 min no de 30; o resto do tempo é quase todo de braço.
+          Nenhum treino passa de 1 hora.
+        </span>
       </div>
 
       <fieldset>
@@ -37,7 +40,7 @@ export function TrainingSettings({ value, onChange }: Props) {
             </label>
           ))}
         </div>
-        <span className="hint">Sem nenhum, o treino usa o peso do corpo, cadeira, toalha, mochila e garrafas.</span>
+        <span className="hint">O treino de braço é feito com halteres (e o banco, se tiver). Sem eles, usa o peso do corpo, cadeira e mochila.</span>
       </fieldset>
 
       <fieldset>

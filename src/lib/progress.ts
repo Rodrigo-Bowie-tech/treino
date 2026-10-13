@@ -26,7 +26,10 @@ export function summarizeSets(sets: SetLog[]): string {
  */
 export function suggestTarget(ex: RepsExercise, last: SessionEntry | undefined): Target {
   const [min, max] = ex.reps;
-  const sets = doneSets(last);
+  // Contam as séries previstas daquele dia, até as do catálogo: uma série extra (feita quando sobra
+  // tempo) não segura a progressão, e um treino mais curto (menos séries) também pode fazer subir.
+  const required = Math.max(1, Math.min(ex.sets, last?.planned ?? ex.sets));
+  const sets = doneSets(last).slice(0, required);
   if (!sets.length) {
     if (ex.bodyweightFirst) return { reps: max, note: `Primeira vez: sem peso extra, ${max} repetições bem lentas.` };
     return ex.load
@@ -39,12 +42,12 @@ export function suggestTarget(ex: RepsExercise, last: SessionEntry | undefined):
 
   const loads = sets.map((s) => s.load ?? 0);
   const load = Math.max(...loads) || undefined;
-  const atTop = sets.length >= ex.sets && sets.every((s) => (s.reps ?? 0) >= max);
+  const atTop = sets.length >= required && sets.every((s) => (s.reps ?? 0) >= max);
 
   if (atTop && ex.load) {
     if (!load) {
       return ex.bodyweightFirst
-        ? { reps: min, note: `Você fez ${max} repetições em todas as séries: faça só com o pé afetado ou acrescente peso numa mochila e volte a ${min}.` }
+        ? { reps: min, note: `Você fez ${max} repetições em todas as séries: se a fascite é num pé só, faça só com ele; se é nos dois, segure um halter (ou uma mochila com peso) e volte a ${min}.` }
         : { reps: min, note: `Você fez ${max} repetições em todas as séries: acrescente peso e volte a ${min}.` };
     }
     const next = nextLoad(load);

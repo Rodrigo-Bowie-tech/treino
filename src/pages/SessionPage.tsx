@@ -31,7 +31,7 @@ import {
   toRecord,
   type ActiveSession,
 } from '../lib/session';
-import { LIMIT_WARNINGS_SEC, SESSION_LIMIT_SEC, isTimed, type Step } from '../lib/steps';
+import { LIMIT_WARNINGS_SEC, SESSION_LIMIT_SEC, isTimed, supersetPartner, type Step } from '../lib/steps';
 import type { EndReason, Phase, PlanItem, SessionRecord } from '../types';
 
 const PHASES: Phase[] = ['aquecimento', 'fascite', 'bracos', 'alongamento'];
@@ -42,7 +42,7 @@ function sideLabel(step: Step, item: PlanItem): string {
 }
 
 function setLabel(step: Step, item: PlanItem): string {
-  if (step.kind === 'prep') return 'Prepare-se';
+  if (step.kind === 'prep') return step.switch ? 'Troque de exercício' : 'Prepare-se';
   if (step.kind === 'descanso') return 'Descanso';
   const parts = item.sets > 1 ? [`Série ${step.set} de ${item.sets}`] : [];
   const side = sideLabel(step, item);
@@ -56,14 +56,15 @@ function announcement(s: ActiveSession, step: Step): string {
   const ex = getExercise(item.exerciseId);
   switch (step.kind) {
     case 'prep':
-      return `Próximo: ${ex.name}.`;
+      return step.switch ? `Agora, ${ex.name}.` : `Próximo: ${ex.name}.`;
     case 'descanso':
       return `Descanso, ${spokenDuration(step.seconds)}.`;
     case 'serie': {
       const reps = item.target?.reps ?? item.reps?.[1];
       const load = item.target?.load ? `, com ${item.target.load.toLocaleString('pt-BR')} quilos` : '';
       const set = item.sets > 1 ? `Série ${step.set} de ${item.sets}. ` : '';
-      return `${step.set === 1 ? `${ex.name}. ` : ''}${set}${reps} repetições${load}${item.sides && item.sides.length > 1 ? ' com cada lado' : ''}.`;
+      // No bi-set os exercícios se alternam: diz o nome em toda série.
+      return `${step.set === 1 || item.superset != null ? `${ex.name}. ` : ''}${set}${reps} repetições${load}${item.sides && item.sides.length > 1 ? ' com cada lado' : ''}.`;
     }
     case 'tempo': {
       const first = step.set === 1 && (!step.side || step.side === item.sides?.[0]);
@@ -242,8 +243,10 @@ export function SessionPage() {
   const nextStep = steps[session.index + 1];
   const nextItem = nextStep && session.plan.items[nextStep.item];
   const prevLogged = session.log.filter((l) => l.item === step.item).map((l) => l.data);
+  const partnerIndex = supersetPartner(session.plan.items, step.item);
+  const partner = partnerIndex != null ? getExercise(session.plan.items[partnerIndex].exerciseId) : undefined;
   const firstOfExercise =
-    step.kind === 'prep' ||
+    steps.findIndex((st) => st.item === step.item) === session.index ||
     (step.kind === 'serie' && step.set === 1) ||
     (step.kind === 'tempo' && step.set === 1 && (!step.side || step.side === item.sides?.[0]));
 
@@ -305,6 +308,7 @@ export function SessionPage() {
         </p>
         <h1>{ex.name}</h1>
         <p className="step-sub">{setLabel(step, item)}</p>
+        {partner && step.kind !== 'descanso' && <p className="muted small">Bi-set com {partner.name}: alterne as séries dos dois.</p>}
 
         {isTimed(step) ? (
           <>
@@ -316,7 +320,7 @@ export function SessionPage() {
             </div>
             {step.kind === 'descanso' && nextItem && nextStep.kind === 'serie' && (
               <p className="muted center">
-                Próximo: série {nextStep.set} de {nextItem.sets}
+                Próximo: {nextItem.superset != null ? `${getExercise(nextItem.exerciseId).name}, ` : ''}série {nextStep.set} de {nextItem.sets}
                 {nextItem.target?.reps ? ` · ${nextItem.target.reps} repetições` : ''}
                 {nextItem.target?.load ? ` · ${fmtKg(nextItem.target.load)}` : ''}
               </p>
@@ -352,7 +356,8 @@ export function SessionPage() {
 
       <details key={session.index} className="card how" open={firstOfExercise}>
         <summary>Como fazer</summary>
-        <ExerciseInfo ex={ex} compact />
+        {/* Abrir o vídeo pausa o treino, para o cronômetro não andar enquanto assiste. */}
+        <ExerciseInfo ex={ex} compact onVideo={() => act(pause)} />
       </details>
 
       <nav className="player-nav" aria-label="Etapas">

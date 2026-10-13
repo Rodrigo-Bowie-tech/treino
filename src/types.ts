@@ -1,4 +1,4 @@
-export type Equipment = 'halteres' | 'elastico' | 'barra';
+export type Equipment = 'halteres' | 'banco' | 'elastico' | 'barra';
 
 export type Category = 'aquecimento' | 'fascite' | 'biceps' | 'triceps' | 'ombros' | 'antebraco' | 'alongamento';
 
@@ -13,8 +13,8 @@ interface BaseExercise {
   id: string;
   name: string;
   category: Category;
-  /** Equipamento exigido; sem valor = feito em casa sem equipamento. */
-  equipment?: Equipment;
+  /** Equipamentos exigidos (todos); sem valor = feito em casa sem equipamento. */
+  equipment?: Equipment[];
   /** Alternativa caseira: só entra no treino de quem não tem este equipamento. */
   replaces?: Equipment;
   /** Objetos comuns usados (cadeira, toalha...), só para exibir. */
@@ -28,6 +28,8 @@ interface BaseExercise {
   perSide?: boolean;
   /** Descanso entre séries; sem valor = descanso padrão dos ajustes (ou nenhum, nos exercícios por tempo). */
   restSec?: number;
+  /** O que buscar no YouTube para ver o exercício; sem valor = o nome do exercício. */
+  video?: string;
 }
 
 /** Exercício por tempo (aquecimento, alongamentos, isometrias). */
@@ -102,6 +104,8 @@ export interface SessionEntry {
   exerciseId: string;
   phase: Phase;
   sets: SetLog[];
+  /** Séries previstas no plano daquele dia (o treino de 30 min tem menos; sem valor = as do catálogo). */
+  planned?: number;
 }
 
 export type EndReason = 'concluido' | 'limite' | 'encerrado';
@@ -136,7 +140,13 @@ export interface PlanItem {
   restSec: number;
   /** Lados a fazer, quando o exercício é de um lado de cada vez. */
   sides?: Side[];
+  /**
+   * Bi-set: dois itens seguidos com o mesmo número são feitos alternando as
+   * séries (série 1 de um, série 1 do outro, descanso, série 2...).
+   */
+  superset?: number;
   target?: Target;
+  /** Tempo estimado do item (num bi-set, o descanso entra no primeiro item). */
   estSec: number;
 }
 

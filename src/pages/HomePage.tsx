@@ -62,7 +62,7 @@ export function HomePage() {
             <strong>{abandoned ? 'Treino interrompido' : 'Treino em andamento'}</strong>
             <span>
               {abandoned
-                ? 'O app foi fechado no meio do treino e o limite de 1 hora já passou. Salve o que você fez ou descarte.'
+                ? 'O treino ficou parado no meio (o app foi fechado ou ficou pausado por horas). Salve o que você fez ou descarte.'
                 : `${Math.floor(activeMs(active, Date.now()) / 60000)} min de treino até agora. Continue de onde parou ou descarte.`}
             </span>
             <div className="btn-row" style={{ marginTop: 8 }}>
@@ -106,8 +106,8 @@ export function HomePage() {
             <h2>Vamos montar seu treino</h2>
           </div>
           <p className="muted">
-            Cada treino tem até 1 hora: 15 min de aquecimento, exercícios para a fascite plantar, braços e um alongamento no
-            fim. Conte o que você tem em casa:
+            Cada treino tem até 1 hora: aquecimento que faz suar, exercícios para a fascite plantar, bastante braço e um
+            alongamento no fim. Conte o que você tem em casa:
           </p>
           <TrainingSettings value={settings} onChange={changeSettings} />
           <button type="button" className="btn block" onClick={() => changeSettings({ configured: true })}>

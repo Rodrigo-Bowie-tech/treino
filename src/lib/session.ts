@@ -157,12 +157,17 @@ export function currentPhase(s: ActiveSession): Phase | undefined {
   return step ? s.plan.items[step.item].phase : undefined;
 }
 
+/** Treino parado (pausado ou sem nenhuma ação) por mais que isto é dado como interrompido. */
+export const IDLE_ABANDON_MS = 3 * 60 * 60 * 1000;
+
 /**
- * Treino que ficou aberto (app fechado no meio) e já passou do limite.
- * O tempo real é estimado pelo último registro feito.
+ * Treino interrompido: o app foi fechado no meio e o limite de 1 hora já
+ * passou, ou ele ficou parado (pausado, por exemplo ao abrir um vídeo) por
+ * horas. O tempo real é estimado pelo último registro feito.
  */
 export function isAbandoned(s: ActiveSession, now: number): boolean {
-  return limitReached(s, now);
+  const lastAction = Math.max(s.stepStartedAt, s.pausedAt ?? 0, ...s.log.map((l) => l.at ?? 0));
+  return limitReached(s, now) || now - lastAction > IDLE_ABANDON_MS;
 }
 
 export function abandonedRecord(s: ActiveSession, now: number): SessionRecord {
@@ -178,7 +183,7 @@ export function toRecord(s: ActiveSession, now: number, endedBy: EndReason): Ses
       .filter((l) => l.item === i)
       .sort((a, b) => a.set - b.set || (a.side ?? '').localeCompare(b.side ?? ''))
       .map((l) => l.data);
-    if (sets.length) entries.push({ exerciseId: item.exerciseId, phase: item.phase, sets });
+    if (sets.length) entries.push({ exerciseId: item.exerciseId, phase: item.phase, sets, planned: item.sets });
   });
   const active = Math.min(activeMs(s, now), SESSION_LIMIT_SEC * 1000);
   return {
