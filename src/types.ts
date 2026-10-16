@@ -7,6 +7,9 @@ export type Phase = 'aquecimento' | 'fascite' | 'bracos' | 'alongamento';
 
 export type Side = 'esquerdo' | 'direito';
 
+/** Tipo de treino: completo (aquecimento, fascite, braços e alongamento) ou só braços (aquecimento curto e braços). */
+export type Focus = 'completo' | 'bracos';
+
 export type FootSide = 'ambos' | Side;
 
 interface BaseExercise {
@@ -81,6 +84,8 @@ export interface Settings {
   equipment: Equipment[];
   /** Duração planejada do treino (o limite é sempre 60 min). */
   durationMin: 30 | 45 | 60;
+  /** Tipo de treino; sem valor = completo (ajustes antigos). */
+  focus?: Focus;
   /** Descanso entre séries dos exercícios de braço. */
   restSec: number;
   /** Inclui o bloco de fascite plantar. */
@@ -158,6 +163,7 @@ export interface Target {
 
 export interface Plan {
   durationMin: number;
+  focus?: Focus;
   items: PlanItem[];
   totalSec: number;
 }

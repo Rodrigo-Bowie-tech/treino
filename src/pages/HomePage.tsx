@@ -11,7 +11,7 @@ import { db, saveSession } from '../db';
 import { useAllSessions, useEditableSettings, useProfile, useSyncStatus } from '../hooks/data';
 import { loadActive, saveActive } from '../lib/activeStore';
 import { unlockAudio } from '../lib/cues';
-import { buildPlan } from '../lib/plan';
+import { FOCUS_OPTIONS, buildPlan, focusOf } from '../lib/plan';
 import { liveSessions } from '../lib/progress';
 import { abandonedRecord, activeMs, isAbandoned, startSession } from '../lib/session';
 import { SESSION_LIMIT_SEC } from '../lib/steps';
@@ -107,7 +107,7 @@ export function HomePage() {
           </div>
           <p className="muted">
             Cada treino tem até 1 hora: aquecimento que faz suar, exercícios para a fascite plantar, bastante braço e um
-            alongamento no fim. Conte o que você tem em casa:
+            alongamento no fim (ou, nos dias que quiser, só braços). Conte o que você tem em casa:
           </p>
           <TrainingSettings value={settings} onChange={changeSettings} />
           <button type="button" className="btn block" onClick={() => changeSettings({ configured: true })}>
@@ -134,7 +134,23 @@ export function HomePage() {
               ))}
             </div>
           </div>
+          <div className="chips" role="group" aria-label="Tipo de treino">
+            {FOCUS_OPTIONS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className="chip"
+                aria-pressed={focusOf(settings) === value}
+                onClick={() => changeSettings({ focus: value })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <p className="muted small">
+            {focusOf(settings) === 'bracos'
+              ? `Aquecimento curto e só braços, com halteres e com o peso do corpo.${settings.fasciitis ? ' Hoje sem os exercícios da fascite: se der, alongue o pé em outro momento.' : ''} `
+              : ''}
             Limite de {SESSION_LIMIT_SEC / 60} min por treino (pausas não contam). Toque num exercício para ver como fazer.
           </p>
           <button type="button" className="btn block big" onClick={start} disabled={!!active}>

@@ -1,4 +1,5 @@
 import { EQUIPMENT_LABELS } from '../data/exercises';
+import { FOCUS_OPTIONS, focusOf } from '../lib/plan';
 import type { Equipment, FootSide, Settings } from '../types';
 
 const EQUIPMENT: Equipment[] = ['halteres', 'banco', 'elastico', 'barra'];
@@ -27,6 +28,21 @@ export function TrainingSettings({ value, onChange }: Props) {
         <span className="hint">
           Aquecimento de 15 min no treino de 60, 10 min no de 45 e 7 min no de 30; o resto do tempo é quase todo de braço.
           Nenhum treino passa de 1 hora.
+        </span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Tipo de treino</span>
+        <div className="chips" role="group" aria-label="Tipo de treino">
+          {FOCUS_OPTIONS.map(([f, label]) => (
+            <button key={f} type="button" className="chip" aria-pressed={focusOf(value) === f} onClick={() => onChange({ focus: f })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="hint">
+          Só braços: aquecimento curto (5 a 7 min), sem a fascite, e o resto do tempo de braço, com halteres e com o peso do
+          corpo. Dá para trocar a qualquer dia na tela inicial.
         </span>
       </div>
 

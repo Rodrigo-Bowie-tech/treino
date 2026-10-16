@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../db';
-import { EXERCISES, findExercise, getExercise } from '../data/exercises';
+import { ARM_DAY_WARMUP_FIXED, ARM_DAY_WARMUP_POOL, EXERCISES, MAX_ARM_SETS, findExercise, getExercise } from '../data/exercises';
 import type { Plan, SessionRecord, Settings } from '../types';
-import { buildPlan, isAvailable, makeItem, phasesOf, prescription, warmupSec } from './plan';
+import { ARM_DAY_BUDGETS, buildPlan, isAvailable, makeItem, phasesOf, prescription, warmupSec } from './plan';
 import { SESSION_LIMIT_SEC, SWITCH_SEC, estimateItems, expandPlan } from './steps';
 import { videoUrl } from './video';
 
@@ -49,7 +49,9 @@ const combos: Settings[] = [];
 for (const durationMin of [30, 45, 60] as const) {
   for (const equipment of [[], ['halteres'], ['halteres', 'banco'], ['halteres', 'banco', 'elastico', 'barra'], ['elastico']] as Settings['equipment'][]) {
     for (const footSide of ['ambos', 'esquerdo'] as const) {
-      for (const fasciitis of [true, false]) combos.push(settings({ durationMin, equipment, footSide, fasciitis }));
+      for (const fasciitis of [true, false]) {
+        for (const focus of ['completo', 'bracos'] as const) combos.push(settings({ durationMin, equipment, footSide, fasciitis, focus }));
+      }
     }
   }
 }
@@ -63,7 +65,7 @@ describe('montagem do treino', () => {
         const plan = buildPlan(s, sessions);
         const phases = phasesOf(plan);
         expect(phases[0].phase).toBe('aquecimento');
-        expect(phases[0].seconds).toBe(warmupSec(s.durationMin));
+        expect(phases[0].seconds).toBe(warmupSec(s.durationMin, s.focus));
         expect(plan.items[0].exerciseId).toBe('aq-trote');
         expect(plan.items[0].seconds).toBeGreaterThanOrEqual(60);
         sessions = [...sessions, done(plan, day)];
@@ -71,6 +73,7 @@ describe('montagem do treino', () => {
     }
     const phases = phasesOf(buildPlan(settings(), []));
     expect(phases.map((p) => p.phase)).toEqual(['aquecimento', 'fascite', 'bracos', 'alongamento']);
+    expect([60, 45, 30].map((d) => warmupSec(d as Settings['durationMin'], 'bracos'))).toEqual([7 * 60, 5 * 60, 5 * 60]);
   });
 
   it('o aquecimento faz suar: polichinelo e prancha sempre, e varia o resto', () => {
@@ -386,5 +389,90 @@ describe('montagem do treino', () => {
     for (const s of combos) {
       for (const item of buildPlan(s, []).items) expect(EXERCISES.some((e) => e.id === item.exerciseId)).toBe(true);
     }
+  });
+});
+
+describe('treino só braços', () => {
+  const armDay = (changes: Partial<Settings> = {}) => settings({ focus: 'bracos', equipment: ['halteres', 'banco'], ...changes });
+  const isBodyweight = (id: string) => !getExercise(id).equipment?.some((eq) => eq !== 'banco');
+
+  it('aquecimento curto, sem fascite e alongamento curto', () => {
+    for (const durationMin of [30, 45, 60] as const) {
+      for (const plan of chain(armDay({ durationMin }), 4)) {
+        const phases = phasesOf(plan);
+        expect(phases.map((p) => p.phase)).toEqual(['aquecimento', 'bracos', 'alongamento']);
+        expect(plan.focus).toBe('bracos');
+        expect(phases[0].seconds).toBe(ARM_DAY_BUDGETS[durationMin].aquecimento);
+        expect(phases[2].seconds).toBeLessThanOrEqual(ARM_DAY_BUDGETS[durationMin].alongamento);
+        // Aquecimento só com o trote, mobilidade, polichinelo e exercícios que aquecem os braços.
+        const warm = phases[0].items.map((i) => i.exerciseId);
+        expect(warm[0]).toBe('aq-trote');
+        expect(warm).toEqual(expect.arrayContaining(ARM_DAY_WARMUP_FIXED));
+        for (const id of warm.slice(1)) expect([...ARM_DAY_WARMUP_FIXED, ...ARM_DAY_WARMUP_POOL]).toContain(id);
+      }
+    }
+  });
+
+  it('quase todo o tempo é de braço, com muito mais séries que no treino completo', () => {
+    const minimum = { 30: 15, 45: 26, 60: 34 };
+    for (const durationMin of [30, 45, 60] as const) {
+      for (const restSec of [45, 60, 90]) {
+        const plans = chain(armDay({ durationMin, restSec }), 8);
+        const full = chain(settings({ durationMin, restSec, equipment: ['halteres', 'banco'] }), 8);
+        for (const plan of plans) {
+          const arms = phasesOf(plan).find((p) => p.phase === 'bracos')!;
+          expect(plan.totalSec).toBeLessThanOrEqual(durationMin * 60);
+          expect(arms.seconds).toBeGreaterThanOrEqual(plan.totalSec * 0.7);
+          if (restSec === 60) {
+            expect(plan.totalSec).toBeGreaterThan((durationMin - 3.5) * 60);
+            expect(armsOf(plan).reduce((t, i) => t + i.sets, 0)).toBeGreaterThanOrEqual(minimum[durationMin]);
+          }
+        }
+        const avgSets = (ps: Plan[]) => ps.reduce((t, p) => t + armsOf(p).reduce((u, i) => u + i.sets, 0), 0) / ps.length;
+        expect(avgSets(plans)).toBeGreaterThan(avgSets(full) * 1.3);
+      }
+    }
+  });
+
+  it('não passa do máximo de séries por músculo', () => {
+    for (const s of combos) {
+      for (const plan of chain(s, 3)) {
+        for (const [cat, max] of Object.entries(MAX_ARM_SETS)) expect(setsOf(plan, cat), cat).toBeLessThanOrEqual(max!);
+      }
+    }
+  });
+
+  it('mistura halteres e peso do corpo, com o peso do corpo depois dos halteres e o antebraço no fim', () => {
+    for (const durationMin of [30, 45, 60] as const) {
+      for (const plan of chain(armDay({ durationMin }), 6)) {
+        const ids = armsOf(plan).map((i) => i.exerciseId);
+        expect(ids.some(isBodyweight)).toBe(true);
+        expect(ids.some((id) => getExercise(id).equipment?.includes('halteres'))).toBe(true);
+        expect(setsOf(plan, 'biceps')).toBeGreaterThanOrEqual(6);
+        expect(setsOf(plan, 'triceps')).toBeGreaterThanOrEqual(6);
+        const cats = ids.map((id) => getExercise(id).category);
+        const firstForearm = cats.indexOf('antebraco');
+        if (firstForearm >= 0) expect(cats.slice(firstForearm).every((c) => c === 'antebraco' || c === 'ombros')).toBe(true);
+      }
+    }
+  });
+
+  it('os dias de só braços não mexem na alternância do fortalecimento da fascite', () => {
+    let sessions: SessionRecord[] = [];
+    const strength: boolean[] = [];
+    for (let day = 1; day <= 8; day++) {
+      const focus = day % 2 === 0 ? 'bracos' : 'completo';
+      const plan = buildPlan(settings({ focus, equipment: ['halteres', 'banco'] }), sessions);
+      if (focus === 'completo') strength.push(plan.items.some((i) => i.exerciseId === 'fa-elevacao'));
+      else expect(plan.items.some((i) => i.phase === 'fascite')).toBe(false);
+      sessions = [...sessions, done(plan, day)];
+    }
+    expect(strength).toEqual([true, false, true, false]);
+  });
+
+  it('ajustes antigos (sem o tipo de treino) continuam com o treino completo', () => {
+    const old = { ...settings(), focus: undefined };
+    expect(buildPlan(old, []).focus).toBe('completo');
+    expect(phasesOf(buildPlan(old, [])).map((p) => p.phase)).toContain('fascite');
   });
 });

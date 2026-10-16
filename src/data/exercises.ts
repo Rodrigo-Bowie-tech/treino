@@ -757,6 +757,40 @@ const TRICEPS: Exercise[] = [
     video: 'mergulho no banco tríceps execução',
   },
   {
+    id: 'tr-extensao-banco',
+    name: 'Tríceps no banco com o peso do corpo',
+    category: 'triceps',
+    kind: 'reps',
+    equipment: ['banco'],
+    sets: 3,
+    reps: [8, 15],
+    needs: 'Banco encostado na parede (para não deslizar)',
+    steps: [
+      'Ajoelhado atrás do banco, apoie as mãos na borda, na largura dos ombros, com os braços esticados e o corpo inclinado à frente.',
+      'Dobre só os cotovelos, levando a testa para baixo da borda do banco; os cotovelos apontam para a frente.',
+      'Empurre o banco estendendo os braços, sem mexer os ombros. Mais difícil: com os joelhos fora do chão (em prancha).',
+    ],
+    tip: 'Funciona como um tríceps testa, só que o peso é o do seu corpo.',
+    caution: 'Teste antes se o banco não escorrega nem tomba.',
+    video: 'extensão de tríceps com o peso do corpo no banco',
+  },
+  {
+    id: 'tr-prancha-sobe-desce',
+    name: 'Prancha sobe e desce',
+    category: 'triceps',
+    kind: 'reps',
+    sets: 3,
+    reps: [8, 12],
+    secPerRep: 4,
+    steps: [
+      'Comece na prancha com os antebraços no chão.',
+      'Apoie uma mão e depois a outra, subindo para a prancha alta (braços esticados).',
+      'Desça um antebraço de cada vez. Cada subida e descida conta 1 repetição; alterne o braço que começa.',
+    ],
+    tip: 'Tríceps e ombros trabalhando com o abdômen firme. Não deixe o quadril balançar.',
+    video: 'prancha sobe e desce up down plank',
+  },
+  {
     id: 'tr-diamante',
     name: 'Flexão diamante',
     category: 'triceps',
@@ -891,6 +925,22 @@ const SHOULDERS: Exercise[] = [
     ],
     tip: 'Trabalha peito, ombros e tríceps ao mesmo tempo.',
     video: 'flexão de braço execução correta',
+  },
+  {
+    id: 'om-pike',
+    name: 'Flexão pike (ombros)',
+    category: 'ombros',
+    kind: 'reps',
+    sets: 3,
+    reps: [6, 12],
+    secPerRep: 4,
+    steps: [
+      'Em posição de flexão, ande com os pés em direção às mãos até o quadril ficar alto, com o corpo em V invertido.',
+      'Dobre os cotovelos levando o topo da cabeça em direção ao chão, entre as mãos.',
+      'Empurre de volta até esticar os braços. Mais difícil: pés em cima do banco.',
+    ],
+    tip: 'É o "desenvolvimento" com o peso do corpo: trabalha ombros e tríceps.',
+    video: 'flexão pike ombros como fazer',
   },
   {
     id: 'om-elastico-lateral',
@@ -1118,16 +1168,44 @@ export const FASCIITIS_STRENGTH = 'fa-elevacao';
 /** Alongamentos de panturrilha para quem não tem degrau: ficam na lista, mas não entram no rodízio. */
 export const FASCIITIS_ALTERNATIVES = ['fa-panturrilha', 'fa-toalha-alongamento'];
 
+/** Um bloco de braço: um bi-set de dois grupos; `bodyweight` = só exercícios com o peso do corpo (e banco). */
+export interface ArmBlockSpec {
+  groups: [Category, Category];
+  bodyweight?: boolean;
+}
+
 /**
- * Blocos de braço, em ordem de prioridade: cada bloco é um bi-set (dois
- * exercícios alternando as séries). Bíceps + tríceps aparecem mais, porque são
- * eles que dão volume ao braço; ombros + antebraço ficam para o fim do treino.
+ * Blocos de braço do treino completo, em ordem de prioridade: cada bloco é um
+ * bi-set (dois exercícios alternando as séries). Bíceps + tríceps aparecem
+ * mais, porque são eles que dão volume ao braço; ombros + antebraço ficam para
+ * o fim do treino.
  */
-export const ARM_BLOCKS: [Category, Category][] = [
-  ['biceps', 'triceps'],
-  ['biceps', 'triceps'],
-  ['ombros', 'antebraco'],
-  ['biceps', 'triceps'],
-  ['ombros', 'antebraco'],
-  ['biceps', 'triceps'],
+export const ARM_BLOCKS: ArmBlockSpec[] = [
+  { groups: ['biceps', 'triceps'] },
+  { groups: ['biceps', 'triceps'] },
+  { groups: ['ombros', 'antebraco'] },
+  { groups: ['biceps', 'triceps'] },
+  { groups: ['ombros', 'antebraco'] },
+  { groups: ['biceps', 'triceps'] },
 ];
+
+/**
+ * Blocos do treino "só braços": mais bi-sets de bíceps + tríceps com halteres
+ * e um bloco com o peso do corpo (tríceps + ombros: mergulho, flexões...).
+ */
+export const ARM_DAY_BLOCKS: ArmBlockSpec[] = [
+  { groups: ['biceps', 'triceps'] },
+  { groups: ['biceps', 'triceps'] },
+  { groups: ['triceps', 'ombros'], bodyweight: true },
+  { groups: ['ombros', 'antebraco'] },
+  { groups: ['biceps', 'triceps'] },
+  { groups: ['biceps', 'ombros'] },
+  { groups: ['ombros', 'antebraco'] },
+];
+
+/** Séries por grupo num treino, no máximo: mais que isso cansa sem dar mais resultado. */
+export const MAX_ARM_SETS: Partial<Record<Category, number>> = { biceps: 12, triceps: 12, ombros: 9, antebraco: 6 };
+
+/** Aquecimento do treino "só braços": curto e voltado para os braços. */
+export const ARM_DAY_WARMUP_FIXED = ['aq-mobilidade', 'aq-polichinelo'];
+export const ARM_DAY_WARMUP_POOL = ['aq-boxe', 'aq-prancha-toque', 'aq-thruster', 'aq-escalador'];

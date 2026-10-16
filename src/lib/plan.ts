@@ -1,6 +1,10 @@
 import {
   ARM_BLOCKS,
+  ARM_DAY_BLOCKS,
+  ARM_DAY_WARMUP_FIXED,
+  ARM_DAY_WARMUP_POOL,
   EXERCISES,
+  MAX_ARM_SETS,
   FASCIITIS_ALTERNATIVES,
   FASCIITIS_CORE,
   FASCIITIS_STRENGTH,
@@ -10,7 +14,7 @@ import {
   findExercise,
   getExercise,
 } from '../data/exercises';
-import type { Category, Exercise, Phase, Plan, PlanItem, SessionRecord, Settings, Side } from '../types';
+import type { Category, Exercise, Focus, Phase, Plan, PlanItem, SessionRecord, Settings, Side } from '../types';
 import { lastEntries, liveSessions, suggestTarget } from './progress';
 import { estimateItem, estimateItems } from './steps';
 
@@ -28,9 +32,35 @@ export const BUDGETS: Record<Settings['durationMin'], { aquecimento: number; fas
   60: { aquecimento: 15 * 60, fascite: 10 * 60, alongamento: 3 * 60 },
 };
 
-/** Duração do aquecimento: 15 min no treino de 60, 10 no de 45 e 7 no de 30. */
-export function warmupSec(durationMin: Settings['durationMin']): number {
-  return BUDGETS[durationMin].aquecimento;
+/** Treino "só braços": aquecimento curto, sem fascite, alongamento curto e todo o resto de braço. */
+export const ARM_DAY_BUDGETS: Record<Settings['durationMin'], { aquecimento: number; alongamento: number }> = {
+  30: { aquecimento: 5 * 60, alongamento: 1 * 60 },
+  45: { aquecimento: 5 * 60, alongamento: 2 * 60 },
+  60: { aquecimento: 7 * 60, alongamento: 2 * 60 },
+};
+
+/** Opções de tipo de treino, para as telas. */
+export const FOCUS_OPTIONS: [Focus, string][] = [
+  ['completo', 'Treino completo'],
+  ['bracos', 'Só braços'],
+];
+
+export function focusOf(settings: Settings): Focus {
+  return settings.focus ?? 'completo';
+}
+
+function budgetsOf(settings: Settings): { aquecimento: number; fascite: number; alongamento: number } {
+  return focusOf(settings) === 'bracos'
+    ? { ...ARM_DAY_BUDGETS[settings.durationMin], fascite: 0 }
+    : BUDGETS[settings.durationMin];
+}
+
+/**
+ * Duração do aquecimento: no treino completo, 15 min no de 60, 10 no de 45 e 7
+ * no de 30; no "só braços", 7 min no de 60 e 5 nos outros.
+ */
+export function warmupSec(durationMin: Settings['durationMin'], focus: Focus = 'completo'): number {
+  return focus === 'bracos' ? ARM_DAY_BUDGETS[durationMin].aquecimento : BUDGETS[durationMin].aquecimento;
 }
 
 /** O trote que abre o aquecimento tem pelo menos 1 min. */
@@ -134,14 +164,22 @@ function fill(candidates: PlanItem[], budget: number, start: PlanItem[] = []): P
 /**
  * Aquecimento com exatamente o tempo da duração escolhida: mobilidade,
  * polichinelo e prancha sempre; os outros exercícios variam de um treino para
- * outro; o trote do começo completa o tempo.
+ * outro; o trote do começo completa o tempo. No "só braços", é curto e só com
+ * exercícios que aquecem os braços (boxe, prancha com toque, agachamento com
+ * desenvolvimento...).
  */
 function buildWarmup(settings: Settings, item: (ex: Exercise, phase: Phase) => PlanItem, rotation: Rotation) {
-  const budget = warmupSec(settings.durationMin);
-  const fixed = WARMUP_FIXED.map((id) => item(getExercise(id), 'aquecimento'));
+  const armDay = focusOf(settings) === 'bracos';
+  const budget = warmupSec(settings.durationMin, focusOf(settings));
+  const fixedIds = armDay ? ARM_DAY_WARMUP_FIXED : WARMUP_FIXED;
+  const fixed = fixedIds.map((id) => item(getExercise(id), 'aquecimento'));
   const pool = leastRecent(
     byCategory('aquecimento').filter(
-      (ex) => ex.id !== WARMUP_OPENER && !WARMUP_FIXED.includes(ex.id) && isAvailable(ex, settings),
+      (ex) =>
+        ex.id !== WARMUP_OPENER &&
+        !fixedIds.includes(ex.id) &&
+        (!armDay || ARM_DAY_WARMUP_POOL.includes(ex.id)) &&
+        isAvailable(ex, settings),
     ),
     rotation,
   );
@@ -168,7 +206,7 @@ function buildFasciitis(
   item: (ex: Exercise, phase: Phase) => PlanItem,
   rotation: Rotation,
 ) {
-  if (!settings.fasciitis) return [];
+  if (!settings.fasciitis || focusOf(settings) === 'bracos') return [];
   const short = settings.durationMin === 30;
   const make = (ex: Exercise) => {
     const it = item(ex, 'fascite');
@@ -228,27 +266,44 @@ function buildArms(
       rotation,
     );
   const blocks: ArmBlock[] = [];
+  const bodyweightBlocks = new Set<ArmBlock>();
   let used = 0;
   let superset = 0;
+
+  // Séries por grupo, para não passar do máximo (no "só braços", que tem muito tempo de braço).
+  const setsBy = new Map<Category, number>();
+  const category = (it: PlanItem) => getExercise(it.exerciseId).category;
+  const withinCap = (items: PlanItem[], extra = 0) => {
+    const add = new Map<Category, number>();
+    for (const it of items) add.set(category(it), (add.get(category(it)) ?? 0) + it.sets + extra);
+    return [...add].every(([cat, n]) => (setsBy.get(cat) ?? 0) + n <= (MAX_ARM_SETS[cat] ?? Infinity));
+  };
+  const count = (items: PlanItem[], extra = 0) =>
+    items.forEach((it) => setsBy.set(category(it), (setsBy.get(category(it)) ?? 0) + (extra || it.sets)));
 
   // Se o último treino ficou sem ombros (comum no de 30 min), o bloco de ombros + antebraço sobe para o 2º lugar.
   const lastArms = liveSessions(sessions).find((s) => s.entries.some((e) => e.phase === 'bracos' && e.sets.length));
   const hadShoulders =
     !lastArms || lastArms.entries.some((e) => e.phase === 'bracos' && e.sets.length && findExercise(e.exerciseId)?.category === 'ombros');
-  const order = [...ARM_BLOCKS];
-  const shoulders = order.findIndex((b) => b.includes('ombros'));
+  const order = [...(focusOf(settings) === 'bracos' ? ARM_DAY_BLOCKS : ARM_BLOCKS)];
+  const shoulders = order.findIndex((b) => b.groups.includes('ombros'));
   if (!hadShoulders && shoulders > 1) order.splice(1, 0, ...order.splice(shoulders, 1));
 
-  for (const [g1, g2] of order) {
+  for (const spec of order) {
+    const [g1, g2] = spec.groups;
+    // Com o peso do corpo: sem halteres, elástico ou barra (o banco pode).
+    const fits = (ex: Exercise) => !spec.bodyweight || !ex.equipment?.some((eq) => eq !== 'banco');
     let picked: ArmBlock | undefined;
     // Bi-set: o primeiro par (do feito há mais tempo) que couber.
-    search: for (const a of candidates(g1)) {
+    search: for (const a of candidates(g1).filter(fits)) {
       // Dois exercícios de um lado de cada vez no mesmo bi-set demoram demais: com um deles, o par vem antes.
-      const partners = candidates(g2).sort((x, y) => Number(!!a.perSide && !!x.perSide) - Number(!!a.perSide && !!y.perSide));
+      const partners = candidates(g2)
+        .filter((b) => fits(b) && b.id !== a.id)
+        .sort((x, y) => Number(!!a.perSide && !!x.perSide) - Number(!!a.perSide && !!y.perSide));
       for (const b of partners) {
         const pair = [item(a, 'bracos'), item(b, 'bracos')];
         pair.forEach((it) => (it.superset = superset));
-        if (used + blockSec(pair) <= budget) {
+        if (used + blockSec(pair) <= budget && withinCap(pair)) {
           picked = pair;
           break search;
         }
@@ -256,19 +311,21 @@ function buildArms(
     }
     // Sem par que caiba (ou sem exercício de um dos grupos): um exercício sozinho.
     if (!picked) {
-      for (const ex of [...candidates(g1), ...candidates(g2)]) {
+      for (const ex of [...candidates(g1), ...candidates(g2)].filter(fits)) {
         const single = [item(ex, 'bracos')];
-        if (used + blockSec(single) <= budget) {
+        if (used + blockSec(single) <= budget && withinCap(single)) {
           picked = single;
           break;
         }
       }
     }
     if (!picked) continue;
+    if (spec.bodyweight) bodyweightBlocks.add(picked);
     if (picked.length === 2) superset++;
     else picked[0].superset = undefined;
     estimateBlock(picked);
     picked.forEach((it) => chosen.add(it.exerciseId));
+    count(picked);
     blocks.push(picked);
     used += blockSec(picked);
   }
@@ -283,9 +340,11 @@ function buildArms(
         return ex.kind === 'reps' && it.sets < ex.sets + MAX_EXTRA_SETS;
       });
       if (!room) continue;
+      if (!withinCap(block.map((it) => ({ ...it, sets: 1 })))) continue;
       const bigger = block.map((it) => ({ ...it, sets: it.sets + 1 }));
       const extra = blockSec(bigger) - blockSec(block);
       if (used + extra <= budget) {
+        count(block, 1);
         block.forEach((it) => it.sets++);
         estimateBlock(block);
         used += extra;
@@ -294,14 +353,18 @@ function buildArms(
     }
   }
 
-  // Ombros e antebraço por último (a pegada cansada atrapalharia as roscas).
-  const late = (b: ArmBlock) => b.some((it) => getExercise(it.exerciseId).category === 'antebraco');
-  return [...blocks.filter((b) => !late(b)), ...blocks.filter(late)].flat();
+  // Ordem: halteres primeiro, depois o bloco com o peso do corpo (até cansar) e, por
+  // último, ombros + antebraço (a pegada cansada atrapalharia as roscas).
+  const rank = (b: ArmBlock) =>
+    b.some((it) => getExercise(it.exerciseId).category === 'antebraco') ? 2 : bodyweightBlocks.has(b) ? 1 : 0;
+  return [0, 1, 2].flatMap((r) => blocks.filter((b) => rank(b) === r)).flat();
 }
 
 /**
  * Monta o treino: aquecimento (15, 10 ou 7 min), bloco de fascite plantar,
  * braços e alongamento final, sem passar da duração escolhida (no máximo 60 min).
+ * No "só braços": aquecimento curto, braços (com halteres e com o peso do
+ * corpo) e alongamento curto, sem a fascite.
  * Os exercícios variam de um treino para outro: entram primeiro os feitos há mais tempo.
  */
 export function buildPlan(settings: Settings, sessions: SessionRecord[]): Plan {
@@ -313,12 +376,12 @@ export function buildPlan(settings: Settings, sessions: SessionRecord[]): Plan {
   const fasciitis = buildFasciitis(settings, sessions, item, rotation);
   const cooldown = fill(
     leastRecent(byCategory('alongamento'), rotation).map((ex) => item(ex, 'alongamento')),
-    BUDGETS[durationMin].alongamento,
+    budgetsOf(settings).alongamento,
   ).sort(byCatalog);
   const arms = buildArms(settings, sessions, durationMin * 60 - sum(warmup) - sum(fasciitis) - sum(cooldown), item, rotation);
 
   const items = [...warmup, ...fasciitis, ...arms, ...cooldown];
-  return { durationMin, items, totalSec: sum(items) };
+  return { durationMin, focus: focusOf(settings), items, totalSec: sum(items) };
 }
 
 export interface PhaseSummary {
